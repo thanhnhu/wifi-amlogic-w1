@@ -4221,6 +4221,20 @@ static int vm_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *ndev,
     return ret;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,7,0)
+static int vm_cfg80211_change_beacon(struct wiphy *wiphy,
+    struct net_device *ndev, struct cfg80211_ap_update *info)
+{
+    int ret = 0;
+    struct wlan_net_vif *wnet_vif = wiphy_to_adapter(wiphy);
+
+    DPRINTF(AML_DEBUG_CFG80211, " %s(%d): <%s>\n", __func__, __LINE__, ndev->name);
+
+    ret = _iv_cfg80211_add_set_beacon(wiphy, ndev, &info->beacon, wnet_vif->vm_dtim_period);
+
+    return ret;
+}
+#else
 static int vm_cfg80211_change_beacon(struct wiphy *wiphy,
     struct net_device *ndev, struct cfg80211_beacon_data *info)
 {
@@ -4229,10 +4243,11 @@ static int vm_cfg80211_change_beacon(struct wiphy *wiphy,
 
     DPRINTF(AML_DEBUG_CFG80211, " %s(%d): <%s>\n", __func__, __LINE__, ndev->name);
 
-    ret = _iv_cfg80211_add_set_beacon(wiphy, ndev, info,wnet_vif->vm_dtim_period);
+    ret = _iv_cfg80211_add_set_beacon(wiphy, ndev, info, wnet_vif->vm_dtim_period);
 
     return ret;
 }
+#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
 static int vm_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *ndev)
@@ -4925,12 +4940,17 @@ int vm_cfg80211_notify_mgmt_rx(struct wlan_net_vif *wnet_vif, unsigned short cha
      *
      * Used by cfg80211_rx_mgmt()
      *
-     * @NL80211_RXMGMT_FLAG_ANSWERED: frame was answered by device/driver.
+     * cfg80211_rx_mgmt API history:
+     *  < 3.14:  (wdev, freq, sig_dbm, buf, len, gfp)               -- 6 args
+     *  3.14-5.7:(wdev, freq, sig_dbm, buf, len, flags, gfp)        -- 7 args
+     *  >= 5.8:  (wdev, freq, sig_dbm, buf, len, flags)             -- 6 args (gfp removed)
      */
-    #if LINUX_VERSION_CODE > KERNEL_VERSION(3,14,29)
-        cfg80211_rx_mgmt(wnet_vif->vm_wdev, freq, 0,data, len, GFP_ATOMIC);
+    #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0))
+        cfg80211_rx_mgmt(wnet_vif->vm_wdev, freq, 0, data, len, 0);
+    #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0))
+        cfg80211_rx_mgmt(wnet_vif->vm_wdev, freq, 0, data, len, 0, GFP_ATOMIC);
     #else
-        cfg80211_rx_mgmt(wnet_vif->vm_wdev, freq, 0,data, len,NL80211_RXMGMT_FLAG_ANSWERED, GFP_ATOMIC);
+        cfg80211_rx_mgmt(wnet_vif->vm_wdev, freq, 0, data, len, GFP_ATOMIC);
     #endif
 
 _exit:

@@ -712,13 +712,13 @@ unsigned int Hal_TxDescriptor_GetTxTime(struct hi_agg_tx_desc* HiTxDesc)
         }
 }
 
-__INLINE unsigned int Hal_TxDescriptor_GetTxTimeBA(struct hi_agg_tx_desc* HiTxDesc)
+static __inline unsigned int Hal_TxDescriptor_GetTxTimeBA(struct hi_agg_tx_desc* HiTxDesc)
 {
         return Hal_TxDescriptor_GetTxTime( HiTxDesc)
                +Hal_TxDescriptor_GetBATime(DESC_RATE,DESC_PREMBLETYPE,DESC_IS_SHORTGI,DESC_RIFS,  DESC_BANDWIDTH);
 }
 
-__INLINE unsigned int Hal_TxDescriptor_GetCtsTime(struct hi_agg_tx_desc* HiTxDesc)
+static __inline unsigned int Hal_TxDescriptor_GetCtsTime(struct hi_agg_tx_desc* HiTxDesc)
 {
         if (IS_HT_RATE(DESC_RATE)) {
                 return 16 // SIFS

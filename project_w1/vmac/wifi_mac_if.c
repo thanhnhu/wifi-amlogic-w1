@@ -3393,7 +3393,7 @@ wifi_set_mac_address(struct net_device *dev, void *addr)
     if (wnet_vif->vm_mainsta != NULL) {
         memcpy(wnet_vif->vm_mainsta->sta_macaddr, sa->sa_data, MAC_ADDR_LEN);
     }
-    WIFINET_ADDR_COPY(dev->dev_addr, wnet_vif->vm_myaddr);
+    WIFI_DEV_ADDR_SET(dev, wnet_vif->vm_myaddr);
     wnet_vif->vm_wdev->wiphy->addresses = (struct mac_address *)(wnet_vif->vm_myaddr);
 
     wifimac->drv_priv->drv_ops.set_macaddr(wifimac->drv_priv, wnet_vif->wnet_vif_id, wnet_vif->vm_myaddr);
@@ -3605,11 +3605,11 @@ static void aml_regd_init(
               struct regulatory_request *request))
 {
     wiphy->reg_notifier = reg_notifier;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)) && (LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0))
         /*
         *  To support GO working on DFS channel,
         *  enable REGULATORY_IGNORE_STALE_KICKOFF flag.
-        *  It will not handle kernel regdomain change disconnect
+        *  Removed in kernel 6.3.
         */
         wiphy->regulatory_flags |= (REGULATORY_IGNORE_STALE_KICKOFF);
 #endif
@@ -3657,7 +3657,7 @@ vm_wlan_net_vif_register(struct wlan_net_vif *wnet_vif, char* name)
     wifimac->wnet_vif_num++;
     WIFINET_QUNLOCK(wifimac);
 
-    WIFINET_ADDR_COPY(dev->dev_addr, wnet_vif->vm_myaddr);
+    WIFI_DEV_ADDR_SET(dev, wnet_vif->vm_myaddr);
     AML_OUTPUT("<running>\n");
     if (register_netdev(dev))
     {

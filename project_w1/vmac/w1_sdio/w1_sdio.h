@@ -28,9 +28,16 @@
 #include <linux/timer.h>
 #include <linux/string.h>
 
+/* Amlogic BSP platform functions – not available on mainline/Debian kernels */
+#ifndef NOT_AMLOGIC_PLATFORM
 extern void sdio_reinit(void);
 extern void amlwifi_set_sdio_host_clk(int clk);
 extern void set_usb_bt_power(int is_on);
+#else
+static inline void sdio_reinit(void) { }
+static inline void amlwifi_set_sdio_host_clk(int clk) { }
+static inline void set_usb_bt_power(int is_on) { }
+#endif /* NOT_AMLOGIC_PLATFORM */
 
 #define PRINT(...)      do {printk("w1_sdio->");printk( __VA_ARGS__ );}while(0)
 #ifndef ASSERT
@@ -75,7 +82,12 @@ extern void set_usb_bt_power(int is_on);
 #define SDIOH_API_RC_SUCCESS (0x00)
 #define SDIOH_API_RC_FAIL (0x01)
 
+/* SYS_TYPE must match pointer size: unsigned int on 32-bit ARM, unsigned long on 64-bit ARM */
+#if defined(SYSTEM32)
+typedef unsigned int  SYS_TYPE;
+#else
 typedef unsigned long SYS_TYPE;
+#endif
 
 /* Stand sdio function number from 0~7
 ** Func1: For register operation, cmd52

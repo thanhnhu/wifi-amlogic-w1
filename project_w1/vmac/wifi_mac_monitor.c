@@ -176,7 +176,7 @@ const char *name)
     ndev->type = ARPHRD_IEEE80211_RADIOTAP;
     strncpy(ndev->name, name, IFNAMSIZ);
     ndev->name[IFNAMSIZ - 1] = 0;
-    WIFINET_ADDR_COPY(ndev->dev_addr, wnet_vif->vm_myaddr);
+    WIFI_DEV_ADDR_SET(ndev, wnet_vif->vm_myaddr);
     ndev->hard_header_len = DEFAULT_HARD_HDR_LEN;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)
@@ -367,7 +367,7 @@ const char *name, enum nl80211_iftype type)
     pnpi = netdev_priv(ndev);
     pnpi->priv = wnet_vif;
     pnpi->sizeof_priv = sizeof(wnet_vif);
-    WIFINET_ADDR_COPY(ndev->dev_addr, wnet_vif->vm_myaddr);
+    WIFI_DEV_ADDR_SET(ndev, wnet_vif->vm_myaddr);
 
     AML_PRINT(AML_DBG_MODULES_P2P,"%s,type %d\n",name,type);
 

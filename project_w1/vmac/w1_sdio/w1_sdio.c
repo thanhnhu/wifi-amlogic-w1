@@ -148,8 +148,13 @@ static int _aml_w1_sdio_request_byte(unsigned char func_num,
     unsigned char len = sizeof(unsigned char);
 
 #if defined(DBG_PRINT_COST_TIME)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0))
+    struct timespec64 now, before;
+    ktime_get_real_ts64(&before);
+#else
     struct timespec now, before;
     getnstimeofday(&before);
+#endif
 #endif /* End of DBG_PRINT_COST_TIME */
 
     ASSERT(func != NULL);
@@ -181,8 +186,11 @@ static int _aml_w1_sdio_request_byte(unsigned char func_num,
     sdio_release_host(func);
 
 #if defined(DBG_PRINT_COST_TIME)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0))
+    ktime_get_real_ts64(&now);
+#else
     getnstimeofday(&now);
-
+#endif
     printk("[sdio byte]: len=1 cost=%lds %luus\n",
         now.tv_sec-before.tv_sec, now.tv_nsec/1000 - before.tv_nsec/1000);
 #endif /* End of DBG_PRINT_COST_TIME */

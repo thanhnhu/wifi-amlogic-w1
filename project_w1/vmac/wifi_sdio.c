@@ -1322,7 +1322,14 @@ static void aml_customer_gpio_wlan_ctrl(int onoff)
     }
 }
 
+/* set_usb_wifi_power is an Amlogic BSP function for controlling WiFi power via GPIO.
+ * On mainline/Debian kernels (NOT_AMLOGIC_PLATFORM), power control is done via
+ * device tree / SDIO subsystem, so stub it out as a no-op. */
+#ifdef NOT_AMLOGIC_PLATFORM
+static inline void set_usb_wifi_power(int is_on) { }
+#else
 extern void set_usb_wifi_power(int is_on);
+#endif
 extern unsigned char wifi_sdio_access;
 #ifdef SDIO_BUILD_IN
 static void config_pmu_reg(bool is_power_on)
@@ -1411,7 +1418,8 @@ static void config_pmu_reg(bool is_power_on)
         hif->hif_ops.hi_bottom_write8(SDIO_FUNC1, RG_SDIO_PMU_HOST_REQ, host_req_status);
         msleep(20);
 
-        wifi_pmu_status = halpriv->hal_ops.hal_get_fw_ps_status();
+        wifi_pmu_status = halpriv->hal_ops.hal_get_fw_ps_status();
+
         printk("%s wifi_pmu_status:0x%x\n", __func__, wifi_pmu_status);
 
         while ((wifi_pmu_status & 0xF) != PMU_ACT_MODE) {

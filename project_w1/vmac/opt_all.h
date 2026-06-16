@@ -83,6 +83,11 @@ extern struct hal_private g_hal_priv;
 #define WAKE_UNLOCK(hal_priv, index)    wake_unlock(&hal_priv->wakelock[index]);
 #define WAKE_LOCK_DESTROY(hal_priv, index) wake_lock_destroy(&hal_priv->wakelock[index]);
 #endif
+#else /* !CONFIG_HAS_WAKELOCK — mainline/Debian kernel: wake_lock API is not available */
+#define WAKE_LOCK_INIT( hal_priv,  index, y)
+#define WAKE_LOCK(hal_priv,  index)
+#define WAKE_UNLOCK(hal_priv, index)
+#define WAKE_LOCK_DESTROY(hal_priv, index)
 #endif
 
 #endif
