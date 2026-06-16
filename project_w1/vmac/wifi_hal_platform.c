@@ -13,7 +13,15 @@ namespace FW_NAME
 #include "version.h"
 #include "wifi_drv_reg_ops.h"
 #if defined (HAL_FPGA_VER)
+/* aml_gpio_consumer.h is Amlogic BSP specific; not available on mainline/Debian kernels */
+#ifndef NOT_AMLOGIC_PLATFORM
 #include <linux/amlogic/aml_gpio_consumer.h>
+#else
+/* FILTER_NUM4 is defined in aml_gpio_consumer.h; provide fallback for mainline kernels */
+#ifndef FILTER_NUM4
+#define FILTER_NUM4 4
+#endif
+#endif
 #include "wifi_mac_com.h"
 #include <linux/delay.h>
 #endif

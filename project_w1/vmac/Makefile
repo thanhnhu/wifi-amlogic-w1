@@ -1,6 +1,7 @@
 ifeq ($(ARCH),)
 ARCH ?= arm64
 CROSS_COMPILE ?= aarch64-linux-gnu-
+EXTRA_CFLAGS += -DSYSTEM64
 else ifeq ($(ARCH),arm)
 SYSTEM_TYPE = SYSTEM32
 CROSS_COMPILE ?= arm-linux-gnueabihf-
@@ -11,7 +12,13 @@ CROSS_COMPILE ?= aarch64-linux-gnu-
 EXTRA_CFLAGS += -DSYSTEM64
 endif
 
-
+# -----------------------------------------------------------------------
+# Debian / mainline kernel build support (Linux 6.x)
+# Usage:
+#   make KERNELDIR=/lib/modules/$(uname -r)/build         # native arm64
+#   make KERNELDIR=<path> ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-
+# -----------------------------------------------------------------------
+# Default KERNELDIR: running kernel headers (Debian / Ubuntu style)
 ifeq ($(PROJ_NAME),p-amlogic)
 SRCTOP ?= /proj/vlsi.wifi/p-amlogic
 KERNELDIR ?= $(SRCTOP)/out/target/product/newton/obj/KERNEL_OBJ
@@ -29,21 +36,14 @@ SRCTOP ?= /proj/vlsi.wifi/gva
 KERNELDIR ?= $(SRCTOP)/kernel-4.9/common
 EXTRA_CFLAGS += -DSYSTEM64
 else
-ifeq ($(SYSTEM_TYPE),)
-ARCH = arm
-CROSS_COMPILE = arm-linux-gnueabihf-
-EXTRA_CFLAGS += -DSYSTEM32
+# Debian / mainline fallback: use the running kernel's build directory
+KERNELDIR ?= /lib/modules/$(shell uname -r)/build
+# On mainline/Debian kernels, Amlogic BSP headers are not present.
+# NOT_AMLOGIC_PLATFORM disables those includes and provides safe stubs.
+EXTRA_CFLAGS += -DNOT_AMLOGIC_PLATFORM
+# Disable features that depend on Amlogic BSP (wifi_get_mac, bcmdhd_mem_prealloc)
+CONFIG_MAC_SUPPORT=n
 endif
-SRCTOP ?= /proj/vlsi.wifi/p212_32bit
-KERNELDIR ?= $(SRCTOP)/out/target/product/ampere/obj/KERNEL_OBJ
-endif
-
-#KERNELDIR ?= $(SRCTOP)/out/target/product/newton/obj/KERNEL_OBJ
-#KERNELDIR ?= $(SRCTOP)/out/target/product/p281/obj/KERNEL_OBJ
-#KERNELDIR ?= $(SRCTOP)/output/c1_ae402_a64_release/build/linux-amlogic-4.19-dev
-#KERNELDIR ?= $(SRCTOP)/out/target/product/aquaman/obj/KERNEL_OBJ
-#KERNELDIR ?= $(SRCTOP)/out/target/product/ampere/obj/KERNEL_OBJ
-#KERNELDIR ?= $(SRCTOP)/kernel-4.9/common
 
 #CC        = $(CROSS_COMPILE)gcc
 #STRIP     = $(CROSS_COMPILE)strip
@@ -65,14 +65,14 @@ CONFIG_BT_RF_SUPPORT=n
 CONFIG_AML_CFG80211=y
 CONFIG_AML_P2P=y
 CONFIG_SDIO=y
-CONFIG_MAC_SUPPORT=y
+CONFIG_MAC_SUPPORT ?= y
 CONFIG_WIFI_CAPTURE=y
 TARGET = vlsicomm
 
 EXTRA_CFLAGS += -Wno-enum-conversion -Wno-strict-prototypes
 EXTRA_CFLAGS += ${INCS}  -DCONFIG_WAPI
 EXTRA_CFLAGS += -Wall -Wno-unused-function #show all warning
-EXTRA_CFLAGS += -Werror -Wno-format -Wno-error #convert warning into error
+EXTRA_CFLAGS += -Wno-format -Wno-error #convert warning into error (relaxed for kernel 6.x)
 #EXTRA_CFLAGS += -W	#more strict, linux head file cannot pass, so give up
 #EXTRA_CFLAGS += -w	#ignore warning
 #EXTRA_CFLAGS += -DHALMODULE
@@ -98,6 +98,9 @@ EXTRA_CFLAGS += -DAML_WPA3
 EXTRA_CFLAGS += -DDYNAMIC_BW
 #EXTRA_CFLAGS += -DWFA_P2P_TEST
 
+# Only apply Amlogic GXL flags when UNOENV is explicitly set.
+# When both UNOENV and UNO_GXL are empty, ifeq(,) would be true — guard against that.
+ifneq ($(UNOENV),)
 ifeq ($(UNOENV),$(UNO_GXL))
 EXTRA_CFLAGS += -DCONFIG_GXL
 EXTRA_CFLAGS += -DCONFIG_HAS_WAKELOCK
@@ -105,6 +108,12 @@ EXTRA_CFLAGS += -DCONFIG_HAS_WAKELOCK
 #EXTRA_CFLAGS += -DCONFIG_GPIO_RESET
 EXTRA_CFLAGS += -DUSE_GPIO_IRQ=1
 EXTRA_CFLAGS += -DUSE_SDIO_IRQ=0
+endif
+else
+# On mainline/non-Amlogic kernels, wifi_irq_num() is not available.
+# Use the SDIO built-in interrupt instead of GPIO IRQ.
+EXTRA_CFLAGS += -DUSE_GPIO_IRQ=0
+EXTRA_CFLAGS += -DUSE_SDIO_IRQ=1
 endif
 
 ifeq ($(CLANG_VERSION), r437112)
@@ -132,7 +141,6 @@ EXTRA_CFLAGS += -DCONFIG_SDIO_IF
 EXTRA_CFLAGS += -DFPGA
 #EXTRA_CFLAGS += -DCONFIG_GPIO_WAKEUP
 
-#EXTRA_CFLAGS += -DNOT_AMLOGIC_PLATFORM
 ifeq ($(CONFIG_PT_SUPPORT),y)
 EXTRA_CFLAGS += -DDRV_PT_SUPPORT
 else
@@ -182,11 +190,11 @@ $(TARGET)-objs = $(TARGET_LIST)
 else
 
 modules:
-	-rm ./print_version.c
+	-rm -f ./print_version.c
 	perl ./create_version_file.pl
-	@echo "UNO_GXL_SUB_P200=$(UNO_GXL_SUB_P200)"
+	@echo "KERNELDIR = $(KERNELDIR)"
+	@echo "ARCH = $(ARCH)"
 	@echo "PROJECT = $(PROJ_NAME)"
-	@echo "UNOENV=$(UNOENV) MAC_VER=$(MAC_VER)"
 	@echo "EXTRA_CFLAGS=$(EXTRA_CFLAGS)"
 	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KERNEL_SRC) M=$(M) modules
 ifneq (${OUT_DIR},)
@@ -196,7 +204,7 @@ else
 	$(CROSS_COMPILE)strip --strip-unneeded ${OUT_DIR}/$(M)/$(TARGET).ko
 endif
 else
-	$(STRIP) -S $(TARGET).ko
+	-$(CROSS_COMPILE)strip -S $(TARGET).ko
 endif
 
 modules_install:

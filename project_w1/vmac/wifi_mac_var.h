@@ -710,6 +710,14 @@ struct wlan_net_vif
 #define WIFINET_ADDR_EQ(a1,a2) (memcmp(a1,a2,WIFINET_ADDR_LEN) == 0)
 #define WIFINET_ADDR_COPY(dst,src) memcpy(dst,src,WIFINET_ADDR_LEN)
 
+/* net_device.dev_addr became const u8 * in kernel 5.17;
+ * use eth_hw_addr_set() to write it on 5.17+ kernels. */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0))
+#define WIFI_DEV_ADDR_SET(ndev, addr)   eth_hw_addr_set((ndev), (const u8 *)(addr))
+#else
+#define WIFI_DEV_ADDR_SET(ndev, addr)   memcpy((ndev)->dev_addr, (addr), ETH_ALEN)
+#endif
+
 #define WIFINET_F_RDG 0x00000001
 
 #define WIFINET_F_PRIVACY 0x00000010

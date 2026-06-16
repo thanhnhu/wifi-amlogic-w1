@@ -23,6 +23,30 @@
 #include <linux/kernel.h>
 #include <linux/kthread.h>
 #include <linux/netdevice.h>
+
+/* complete_and_exit() was removed in kernel 6.7; kthread_complete_and_exit() is the replacement */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,7,0)
+#define complete_and_exit(c, s) kthread_complete_and_exit(c, s)
+#endif
+
+/* sched_setscheduler() was unexported from modules in kernel 5.17.
+/* sched_setscheduler() was unexported from modules in kernel 5.17.
+ * Use sched_set_fifo() and sched_set_normal() which are exported for modules (since 5.9).
+ * Both return void, so the wrapper returns 0 to satisfy callers that check the return value.
+ */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,17,0)
+#include <linux/sched/rt.h>
+static inline int _aml_sched_setscheduler(struct task_struct *p, int policy,
+                                           const struct sched_param *param)
+{
+    if (policy == SCHED_FIFO || policy == SCHED_RR)
+        sched_set_fifo(p);
+    else
+        sched_set_normal(p, 0);
+    return 0;
+}
+#define sched_setscheduler(p, policy, param) _aml_sched_setscheduler(p, policy, param)
+#endif
 #include <linux/sched.h>
 #include <linux/etherdevice.h>
 #include <linux/wireless.h>
@@ -231,7 +255,7 @@ static __inline void FREE(void *a, char *name)
 #elif defined (SYSTEM64)
     typedef unsigned long SYS_TYPE;
 #else
-    #err "SYSTEM TYPE ERR"
+    #error "Neither SYSTEM32 nor SYSTEM64 defined — set ARCH=arm or ARCH=arm64"
 #endif
 
 

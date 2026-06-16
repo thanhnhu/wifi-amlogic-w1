@@ -4,19 +4,22 @@ TARGET=vlsicomm.ko
 #export PROJECT
 export PROJ_NAME
 
-all: firmware driver
+# -----------------------------------------------------------------------
+# Debian / mainline kernel build
+# To build the driver against the running Debian kernel:
+#   make driver
+# To cross-compile (e.g. from x86 host for arm64 target):
+#   make driver ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+#               KERNELDIR=/path/to/kernel/build
+# -----------------------------------------------------------------------
 
-firmware:
-	make -C firmware
+all: driver
 
 driver:
-	make -C vmac
-	cp vmac/$(TARGET) ./
-   
+	$(MAKE) -C vmac
 
-clean :
-	make clean -C firmware
-	make clean -C vmac
-	rm -rf $(TARGET)
+clean:
+	$(MAKE) clean -C vmac
+	rm -f $(TARGET)
 
-.PHONY:firmware driver
+.PHONY: driver clean

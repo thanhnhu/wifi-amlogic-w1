@@ -142,9 +142,15 @@ int aml_sdio_scat_rw(struct scatterlist *sg_list, unsigned int sg_num, unsigned 
 #if defined (HAL_FPGA_VER)
 
 #include <asm/io.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
+/* Amlogic BSP platform functions – not available on mainline/Debian kernels */
+#ifndef NOT_AMLOGIC_PLATFORM
 extern void amlwifi_set_sdio_host_clk(int clk);
 extern void sdio_reinit(void);
+#else
+static inline void amlwifi_set_sdio_host_clk(int clk) { }
+static inline void sdio_reinit(void) { }
+#endif /* NOT_AMLOGIC_PLATFORM */
 void aml_sdio_reset(void);
 void aml_sdio_irq_path(unsigned char b_gpio);
 #if (USE_GPIO_IRQ)

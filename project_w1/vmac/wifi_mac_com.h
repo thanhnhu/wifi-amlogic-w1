@@ -34,7 +34,7 @@
 #include <linux/sysctl.h>
 #include <linux/netdevice.h>
 #include <linux/if_arp.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 #include <net/inet_ecn.h>
 
 #include "wifi_drv_config.h"
