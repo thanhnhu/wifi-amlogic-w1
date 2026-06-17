@@ -19,6 +19,10 @@ endif
 #   make KERNELDIR=<path> ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-
 # -----------------------------------------------------------------------
 # Default KERNELDIR: running kernel headers (Debian / Ubuntu style)
+# Keep Android BSP default unless overridden by platform-specific branch below.
+WIFIMAC_PATH ?= /data/vendor/wifi/wifimac.txt
+# Secondary path tried when the primary file is missing (cross-environment compat).
+WIFIMAC_PATH2 ?= /etc/wifimac.txt
 ifeq ($(PROJ_NAME),p-amlogic)
 SRCTOP ?= /proj/vlsi.wifi/p-amlogic
 KERNELDIR ?= $(SRCTOP)/out/target/product/newton/obj/KERNEL_OBJ
@@ -43,6 +47,10 @@ KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 EXTRA_CFLAGS += -DNOT_AMLOGIC_PLATFORM
 # Keep file-based MAC support enabled to avoid random MAC fallback when EFUSE is blank.
 CONFIG_MAC_SUPPORT=y
+# /data/vendor/wifi may not exist on Debian; use a persistent path that always has a parent dir.
+WIFIMAC_PATH=/etc/wifimac.txt
+# Fall back to the Android BSP location for cross-environment compatibility.
+WIFIMAC_PATH2=/data/vendor/wifi/wifimac.txt
 endif
 
 #CC        = $(CROSS_COMPILE)gcc
@@ -155,7 +163,8 @@ endif
 
 ifeq ($(CONFIG_MAC_SUPPORT),y)
 EXTRA_CFLAGS += -DCONFIG_MAC_SUPPORT
-EXTRA_CFLAGS += -DWIFIMAC_PATH=\"/data/vendor/wifi/wifimac.txt\"
+EXTRA_CFLAGS += -DWIFIMAC_PATH=\"$(WIFIMAC_PATH)\"
+EXTRA_CFLAGS += -DWIFIMAC_PATH2=\"$(WIFIMAC_PATH2)\"
 endif
 
 ifeq ($(CONFIG_BT_RF_SUPPORT),y)

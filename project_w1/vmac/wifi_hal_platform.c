@@ -824,7 +824,54 @@ char *hif_type = "SDIO";
     struct mem_statistic f_pn_buf[64];
 #endif
 #ifdef CONFIG_MAC_SUPPORT
+#ifdef NOT_AMLOGIC_PLATFORM
+/* wifi_get_mac() is provided by the Amlogic BSP and is not available on
+ * mainline/Debian kernels. Provide a stub returning an all-0xff address so the
+ * caller falls back to the wifimac.txt file / EFUSE / random MAC path. */
+static u8 *wifi_get_mac(void)
+{
+    static u8 invalid_mac[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+    return invalid_mac;
+}
+#else
 extern u8 *wifi_get_mac(void);
+#endif
+
+#ifndef WIFIMAC_PATH2
+#define WIFIMAC_PATH2 WIFIMAC_PATH
+#endif
+
+/* Return the MAC file path that currently exists. Prefer the primary path;
+ * fall back to the secondary path for cross-environment compatibility.
+ * If neither exists, return the primary path so a fresh file is created there. */
+static const char *aml_get_wifimac_path(void)
+{
+    if (aml_is_file_readable(WIFIMAC_PATH) == true) {
+        return WIFIMAC_PATH;
+    }
+    if (aml_is_file_readable(WIFIMAC_PATH2) == true) {
+        return WIFIMAC_PATH2;
+    }
+    return WIFIMAC_PATH;
+}
+
+static void aml_persist_mac_to_file(u8 mac0, u8 mac1, u8 mac2, u8 mac3, u8 mac4, u8 mac5, const char *source)
+{
+    const char *path = aml_get_wifimac_path();
+    u8 cbuf[FILE_DATA_LEN + 1];
+    int read_size;
+
+    memset(cbuf, 0, sizeof(cbuf));
+    read_size = aml_retrieve_from_file(path, cbuf, FILE_DATA_LEN);
+    if (read_size < 21) {
+        memcpy(cbuf, "CHIP_ID=000000000000\n", 21);
+    }
+
+    snprintf((char *)cbuf + 21, sizeof(cbuf) - 21, MAC_FMT, mac0, mac1, mac2, mac3, mac4, mac5);
+    if (aml_store_to_file(path, cbuf, FILE_DATA_LEN) > 0) {
+        printk("write the %s mac to %s\n", source, path);
+    }
+}
 #endif
 extern void print_driver_version(void);
 
@@ -833,12 +880,11 @@ void aml_wifi_set_mac_addr(void)
     u64 timestamp;
 #ifdef CONFIG_MAC_SUPPORT
     u8 addr[ETH_ALEN];
-    u8 cbuf[50];
     unsigned int efuse_data_l = 0;
     unsigned int efuse_data_h = 0;
 
     memcpy(addr, wifi_get_mac(), ETH_ALEN);
-    if (addr[0] != 0xff || aml_read_macaddr_from_file(WIFIMAC_PATH, addr) == true) {
+    if (addr[0] != 0xff || aml_read_macaddr_from_file(aml_get_wifimac_path(), addr) == true) {
         mac_addr0 = addr[0];
         mac_addr1 = addr[1];
         mac_addr2 = addr[2];
@@ -855,12 +901,7 @@ void aml_wifi_set_mac_addr(void)
             mac_addr3 = (efuse_data_l & 0x00ff0000) >> 16;
             mac_addr4 = (efuse_data_l & 0xff00) >> 8;
             mac_addr5 = efuse_data_l & 0xff;
-            aml_retrieve_from_file(WIFIMAC_PATH, cbuf, 48);
-
-            sprintf(cbuf + 21, MAC_FMT, mac_addr0, mac_addr1, mac_addr2, mac_addr3, mac_addr4, mac_addr5);
-            if (aml_store_to_file(WIFIMAC_PATH, cbuf, strlen(cbuf)) > 0) {
-                printk("write the efuse mac to wifimac.txt\n");
-            }
+            aml_persist_mac_to_file(mac_addr0, mac_addr1, mac_addr2, mac_addr3, mac_addr4, mac_addr5, "efuse");
         } else {
 #endif
             timestamp = get_jiffies_64();
@@ -868,11 +909,7 @@ void aml_wifi_set_mac_addr(void)
             mac_addr4 = ((timestamp >> 2) & 0xff);
             mac_addr5 = ((timestamp >> 4) & 0xff);
 #ifdef CONFIG_MAC_SUPPORT
-            aml_retrieve_from_file(WIFIMAC_PATH, cbuf, 48);
-
-            sprintf(cbuf + 21, MAC_FMT, mac_addr0, mac_addr1, mac_addr2, mac_addr3, mac_addr4, mac_addr5);
-            if (aml_store_to_file(WIFIMAC_PATH, cbuf, strlen(cbuf)) > 0)
-                printk("write the random mac to wifimac.txt\n");
+            aml_persist_mac_to_file(mac_addr0, mac_addr1, mac_addr2, mac_addr3, mac_addr4, mac_addr5, "random");
         }
     }
 #endif
@@ -883,11 +920,7 @@ void aml_wifi_set_mac_addr(void)
         mac_addr0 &= ~0x3;
         printk("to [0x%x] \n", mac_addr0);
 #ifdef CONFIG_MAC_SUPPORT
-        aml_retrieve_from_file(WIFIMAC_PATH, cbuf, 48);
-
-        sprintf(cbuf + 21, MAC_FMT, mac_addr0, mac_addr1, mac_addr2, mac_addr3, mac_addr4, mac_addr5);
-        if (aml_store_to_file(WIFIMAC_PATH, cbuf, strlen(cbuf)) > 0)
-            printk("write the random mac to wifimac.txt\n");
+        aml_persist_mac_to_file(mac_addr0, mac_addr1, mac_addr2, mac_addr3, mac_addr4, mac_addr5, "adjusted");
 #endif
     }
 }

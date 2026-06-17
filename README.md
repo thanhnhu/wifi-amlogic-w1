@@ -280,13 +280,16 @@ Modules not loaded yet. Run step 4 first.
 ## 6. MAC address
 
 On non-Amlogic platforms the driver reads the MAC from the chip's EFUSE registers.
-If EFUSE is blank (all zeros), a randomly-generated MAC is assigned.
+If EFUSE is blank (all zeros), the first boot generates a random MAC and now auto-persists it.
 
-To set a persistent MAC address, write it to `/data/vendor/wifi/wifimac.txt`
-(or adjust `WIFIMAC_PATH` in the Makefile):
+Default `WIFIMAC_PATH`:
+- Mainline/Debian fallback build: `/etc/wifimac.txt`
+- Amlogic BSP build: `/data/vendor/wifi/wifimac.txt`
+
+To set a specific persistent MAC manually, write it to the active path (or adjust `WIFIMAC_PATH` in the Makefile):
 
 ```bash
-echo "aa:bb:cc:dd:ee:ff" > /data/vendor/wifi/wifimac.txt
+echo "aa:bb:cc:dd:ee:ff" > /etc/wifimac.txt
 ```
 
 ---
