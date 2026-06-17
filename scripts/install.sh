@@ -40,4 +40,4 @@ modprobe aml_sdio
 modprobe vlsicomm
 
 echo "Done. Check the interface with:  ip link show wlan0"
-echo "Next: set up WiFi auto-connect (see README section 4)."
+echo "Next: set up WiFi auto-connect — README section 4, steps 3-7 (steps 1-2 are done)."

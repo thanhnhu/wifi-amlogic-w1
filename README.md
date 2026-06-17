@@ -26,7 +26,8 @@ sudo ./install.sh
 ```
 
 `install.sh` copies the modules, runs `depmod`, adds them to `/etc/modules` (auto-load on boot),
-and loads them immediately. After that, set up WiFi auto-connect in [section 4](#4-install-and-connect-survive-reboot).
+and loads them immediately — i.e. it does [section 4](#4-install-and-connect-survive-reboot) steps 1
+and 2 for you. Next, continue from **section 4, step 3** to set up WiFi auto-connect.
 
 > The `.ko` files only load on the **exact** kernel they were built for. If there is no release
 > for your `uname -r`, build from source below. Releases are produced automatically by the
