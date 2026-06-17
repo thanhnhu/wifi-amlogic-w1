@@ -41,8 +41,8 @@ KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 # On mainline/Debian kernels, Amlogic BSP headers are not present.
 # NOT_AMLOGIC_PLATFORM disables those includes and provides safe stubs.
 EXTRA_CFLAGS += -DNOT_AMLOGIC_PLATFORM
-# Disable features that depend on Amlogic BSP (wifi_get_mac, bcmdhd_mem_prealloc)
-CONFIG_MAC_SUPPORT=n
+# Keep file-based MAC support enabled to avoid random MAC fallback when EFUSE is blank.
+CONFIG_MAC_SUPPORT=y
 endif
 
 #CC        = $(CROSS_COMPILE)gcc

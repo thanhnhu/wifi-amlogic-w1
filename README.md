@@ -56,7 +56,7 @@ Headers are distributed as `.deb` files in the
    ```bash
    # Replace the filename with the one from the matching release
    wget https://github.com/devmfc/debian-on-amlogic/releases/download/v6.12.30/linux-headers-6.12.30-meson64_20250522_arm64.deb
-   dpkg -i linux-headers-6.12.30-meson64_20250522_arm64.deb
+   sudo dpkg -i linux-headers-6.12.30-meson64_20250522_arm64.deb
    sudo apt install build-essential
    ```
 
@@ -162,6 +162,8 @@ ip_address=192.168.x.x
 dhclient wlan0
 ```
 
+Once connected and verified, follow these steps to make WiFi persist across reboots.
+
 ---
 
 ### Install permanently (survive reboot)
@@ -174,22 +176,67 @@ sudo cp vmac/aml_sdio.ko vmac/vlsicomm.ko \
 sudo depmod -a
 ```
 
-**2. Save wpa_supplicant config to a permanent location:**
+**2. Auto-load modules on boot:**
 
 ```bash
+printf 'aml_sdio\nvlsicomm\n' >> /etc/modules
+```
+
+**3. Set regulatory domain on boot** (required for 5 GHz DFS channels):
+
+On **devmfc/debian-on-amlogic** kernels, `cfg80211` is built-in and the kernel uses compiled-in X.509 keys
+to verify the regulatory database. The Debian regulatory db (signed with Debian keys) is compatible:
+
+```bash
+# Use Debian regulatory db (works with devmfc kernel signing keys)
+update-alternatives --set regulatory.db /lib/firmware/regulatory.db-debian
+ln -sf /lib/firmware/regulatory.db.p7s-debian /etc/alternatives/regulatory.db.p7s
+
+# Add to kernel cmdline (devmfc/debian-on-amlogic only)
+# Replace 6.x.y with your kernel version (e.g. kernel-6.12.30.config)
+echo 'bootargs8=cfg80211.ieee80211_regdom=VN' >> /boot/box-config/kernel-6.x.y.config
+
+# Run iw reg set VN just before wpa_supplicant starts
+mkdir -p /etc/systemd/system/wpa_supplicant@wlan0.service.d
+printf '[Service]\nExecStartPre=/sbin/iw reg set VN\n' > /etc/systemd/system/wpa_supplicant@wlan0.service.d/regdom.conf
+systemctl daemon-reload
+```
+
+> Replace `VN` with your country code (e.g. `US`, `DE`, `JP`).
+>
+> **Verify after reboot:** `iw reg get | grep country` should show `country VN: DFS-FCC` (not `country 00`).
+>
+> **Note on 5 GHz DFS after reboot:** Even with correct regulatory domain, DFS channels (e.g.
+> ch100 / 5500 MHz) may intermittently fail with AUTH timeout on non-Amlogic platforms.
+> **2.4 GHz is recommended for reliable persistent connection.**
+> If 5 GHz auto-connect fails after reboot, retry manually:
+> ```bash
+> iw reg set VN
+> systemctl restart wpa_supplicant@wlan0
+> sleep 2
+> iw reg get | grep country
+> wpa_cli -i wlan0 status
+> ```
+
+**4. Save wpa_supplicant config to a permanent location:**
+
+```bash
+# /etc/wpa_supplicant/wpa_supplicant-wlan0.conf may be a symlink — remove before copying
+rm -f /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
 cp /tmp/wpa.conf /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
 ```
 
-**3. Enable wpa_supplicant service on boot:**
+**5. Enable wpa_supplicant service on boot:**
 
 ```bash
 systemctl enable wpa_supplicant@wlan0
 systemctl start wpa_supplicant@wlan0
 ```
 
-**4. Enable DHCP on wlan0 at boot** — create `/etc/network/interfaces.d/wlan0`:
+**6. Enable DHCP on wlan0 at boot** — create `/etc/network/interfaces.d/wlan0`:
 
 ```bash
+mkdir -p /etc/network/interfaces.d
 printf 'auto wlan0\niface wlan0 inet dhcp\n' > /etc/network/interfaces.d/wlan0
 ```
 
@@ -252,6 +299,6 @@ When building without `PROJ_NAME` set (default path), the Makefile automatically
 - Defines `-DNOT_AMLOGIC_PLATFORM` which:
   - Removes dependency on `<linux/amlogic/wlan_plat.h>` and `<linux/amlogic/aml_gpio_consumer.h>`
   - Stubs out `sdio_reinit()`, `amlwifi_set_sdio_host_clk()`, `set_usb_bt_power()`, `set_usb_wifi_power()`
-  - Disables `CONFIG_MAC_SUPPORT` (driver falls back to EFUSE or random MAC)
+  - Keeps `CONFIG_MAC_SUPPORT` enabled (driver can use `WIFIMAC_PATH`; fallback remains EFUSE/random if file/EFUSE is unavailable)
 - Disables `-Werror` to allow building against kernel 6.x headers without treating warnings as errors
 - Replaces removed `prandom_bytes()` with `get_random_bytes()` (API removed in kernel 6.11)
