@@ -1,0 +1,109 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      kernel_version:
+        description: 'Target kernel version (uname -r), e.g. 6.12.30-meson64'
+        required: true
+        default: '6.12.30-meson64'
+      headers_deb_url:
+        description: 'URL to the matching linux-headers .deb (arm64)'
+        required: true
+        default: 'https://github.com/devmfc/debian-on-amlogic/releases/download/v6.12.30/linux-headers-6.12.30-meson64_20250522_arm64.deb'
+      release_tag:
+        description: 'Create a Release with this tag (leave empty to only upload an artifact)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+env:
+  DEFAULT_KVER: '6.12.30-meson64'
+  DEFAULT_HEADERS_URL: 'https://github.com/devmfc/debian-on-amlogic/releases/download/v6.12.30/linux-headers-6.12.30-meson64_20250522_arm64.deb'
+
+jobs:
+  build:
+    # Native arm64 runner: the kernel-headers package ships arm64 host tools
+    # (fixdep, modpost, ...), so building natively avoids cross-compile breakage.
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve build parameters
+        id: vars
+        run: |
+          KVER="${{ github.event.inputs.kernel_version || env.DEFAULT_KVER }}"
+          HURL="${{ github.event.inputs.headers_deb_url || env.DEFAULT_HEADERS_URL }}"
+          echo "kver=$KVER" >> "$GITHUB_OUTPUT"
+          echo "headers_url=$HURL" >> "$GITHUB_OUTPUT"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential bc kmod cpio flex bison \
+            libssl-dev libelf-dev perl wget
+
+      - name: Download and install kernel headers
+        run: |
+          wget -q -O /tmp/headers.deb "${{ steps.vars.outputs.headers_url }}"
+          sudo dpkg -i /tmp/headers.deb || sudo apt-get -f install -y
+
+      - name: Build driver
+        run: |
+          KVER="${{ steps.vars.outputs.kver }}"
+          KDIR="/lib/modules/${KVER}/build"
+          if [ ! -d "$KDIR" ]; then KDIR="/usr/src/linux-headers-${KVER}"; fi
+          echo "Using KERNELDIR=$KDIR"
+          test -d "$KDIR" || { echo "Kernel headers dir not found"; exit 1; }
+          cd project_w1
+          make clean || true
+          make -j"$(nproc)" driver ARCH=arm64 CROSS_COMPILE= KERNELDIR="$KDIR"
+          ls -l vmac/aml_sdio.ko vmac/vlsicomm.ko
+
+      - name: Package
+        id: pkg
+        run: |
+          KVER="${{ steps.vars.outputs.kver }}"
+          OUT="aml-w1-${KVER}"
+          mkdir -p "dist/${OUT}"
+          cp project_w1/vmac/aml_sdio.ko project_w1/vmac/vlsicomm.ko "dist/${OUT}/"
+          cp scripts/install.sh "dist/${OUT}/"
+          chmod +x "dist/${OUT}/install.sh"
+          echo "$KVER" > "dist/${OUT}/KERNEL_VERSION"
+          ( cd dist && tar czf "${OUT}.tar.gz" "${OUT}" && sha256sum "${OUT}.tar.gz" > "${OUT}.tar.gz.sha256" )
+          echo "name=${OUT}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pkg.outputs.name }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.release_tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.release_tag || github.ref_name }}
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+          body: |
+            Prebuilt **aml_w1** WiFi driver modules for kernel `${{ steps.vars.outputs.kver }}`.
+
+            **Install (download and run):**
+            ```bash
+            tar xzf ${{ steps.pkg.outputs.name }}.tar.gz
+            cd ${{ steps.pkg.outputs.name }}
+            sudo ./install.sh
+            ```
+
+            > These `.ko` files only load on kernel `${{ steps.vars.outputs.kver }}`.
+            > For any other kernel version, build from source (see README).

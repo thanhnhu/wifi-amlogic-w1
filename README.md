@@ -13,6 +13,28 @@ Out-of-tree Linux kernel module for the Amlogic W155S1 (chip ID `0x8888`) WiFi S
 
 ---
 
+## Quick install (prebuilt release)
+
+If a [release](../../releases) exists for **your exact kernel version** (`uname -r`), you can skip
+building and just install the prebuilt modules:
+
+```bash
+# Download the tarball matching your kernel from the Releases page, then:
+tar xzf aml-w1-<kernel-version>.tar.gz
+cd aml-w1-<kernel-version>
+sudo ./install.sh
+```
+
+`install.sh` copies the modules, runs `depmod`, adds them to `/etc/modules` (auto-load on boot),
+and loads them immediately. After that, set up WiFi auto-connect in [section 4](#4-install-and-connect-survive-reboot).
+
+> The `.ko` files only load on the **exact** kernel they were built for. If there is no release
+> for your `uname -r`, build from source below. Releases are produced automatically by the
+> [Build and Release workflow](.github/workflows/build-release.yml) when a `v*` tag is pushed
+> (or [trigger a build manually](#build-a-release-manually-github-actions)).
+
+---
+
 ## 1. Get the source
 
 ```bash
@@ -68,6 +90,7 @@ Headers are distributed as `.deb` files in the
 
 ```bash
 cd project_w1
+make clean
 make -j4 driver
 # Output modules: vmac/vlsicomm.ko  vmac/aml_sdio.ko
 ```
@@ -97,76 +120,7 @@ make -j4 driver
 
 ---
 
-## 4. Load the modules
-
-```bash
-# Load SDIO bus driver first, then the WiFi driver
-sudo insmod vmac/aml_sdio.ko
-sudo insmod vmac/vlsicomm.ko
-```
-
-To verify the modules loaded:
-```bash
-lsmod | grep -E 'aml_sdio|vlsicomm'
-dmesg | tail -30
-```
-
----
-
-## 5. Connect to WiFi
-
-### 5a. Bring up the interface
-
-```bash
-ip link set wlan0 up
-```
-
-### 5b. Scan available networks
-
-```bash
-iw dev wlan0 scan | grep -E 'SSID|signal|freq'
-```
-
-### 5c. Create wpa_supplicant config
-
-> **Important:** `country=` must be set to your actual country code. Without it, the kernel
-> uses world regulatory domain (`00`) which restricts many 5 GHz channels and causes AUTH
-> timeout on DFS channels (e.g. ch100 / 5500 MHz).
-> Replace `VN` with your country code (e.g. `US`, `DE`, `JP`, etc.)
-
-```bash
-# Set regulatory domain first (required for 5 GHz DFS channels)
-iw reg set VN
-
-printf 'ctrl_interface=/var/run/wpa_supplicant\nctrl_interface_group=0\nupdate_config=1\ncountry=VN\n' > /tmp/wpa.conf
-wpa_passphrase "YOUR_SSID" "YOUR_PASSWORD" >> /tmp/wpa.conf
-```
-
-### 5d. Start wpa_supplicant and connect
-
-```bash
-wpa_supplicant -B -i wlan0 -c /tmp/wpa.conf
-sleep 5
-wpa_cli -i wlan0 status
-```
-
-Expected output when connected:
-```
-wpa_state=COMPLETED
-ip_address=192.168.x.x
-```
-
-### 5e. Get IP address
-
-```bash
-dhclient wlan0
-```
-
-Once connected and verified, follow these steps to make WiFi persist across reboots.
-
----
-
-### Install permanently (survive reboot)
+## 4. Install and connect (survive reboot)
 
 **1. Install the kernel modules:**
 
@@ -176,69 +130,180 @@ sudo cp vmac/aml_sdio.ko vmac/vlsicomm.ko \
 sudo depmod -a
 ```
 
-**2. Auto-load modules on boot:**
+**2. Auto-load modules on boot (and load them now):**
 
 ```bash
+# Register the modules for automatic load on every boot
 printf 'aml_sdio\nvlsicomm\n' >> /etc/modules
+
+# Load them now so you can finish the rest without rebooting
+sudo depmod -a
+sudo modprobe aml_sdio
+sudo modprobe vlsicomm
+
+# Bring up the interface and find your SSID names for the config below
+sudo ip link set wlan0 up
+iw dev wlan0 scan | grep -E 'SSID|freq'
 ```
 
 **3. Set regulatory domain on boot** (required for 5 GHz DFS channels):
 
-On **devmfc/debian-on-amlogic** kernels, `cfg80211` is built-in and the kernel uses compiled-in X.509 keys
-to verify the regulatory database. The Debian regulatory db (signed with Debian keys) is compatible:
+> **Easiest option — change the router channel instead of fighting DFS:**
+>
+> If you control the router, the simplest path is to move its 5 GHz radio off the DFS band so the
+> chip never has to wait for a Channel Availability Check (CAC). Set the router's 5 GHz channel to a
+> **non-DFS** channel — **36, 40, 44, or 48** (5180–5240 MHz) — in its admin panel (usually
+> *Wireless → 5 GHz → Channel*, change from *Auto*/a DFS channel like 100/5500 to a fixed 36–48).
+>
+> Benefits:
+>
+> - No CAC wait → the chip associates to 5 GHz **immediately at boot**, so the 5 GHz watchdog in
+>   step 6 below becomes unnecessary (you can skip it).
+> - More stable: DFS channels can force the AP off-air for radar avoidance; non-DFS channels don't.
+>
+> You should still set the correct country/regulatory domain below so the non-DFS channels are
+> permitted at full power — but you avoid the DFS-specific timing problems entirely.
+
+On **devmfc/debian-on-amlogic** kernels, `cfg80211` is a **loadable module** that verifies the
+regulatory database against compiled-in X.509 keys at load time. The kernel ships only the
+`sforshee` (upstream) and `wens` keys — it has **no Debian key**. So you must use the **upstream**
+regulatory db, not the Debian one, otherwise the kernel logs
+`loaded regulatory.db is malformed or signature is missing/invalid` and stays at `country 00`.
 
 ```bash
-# Use Debian regulatory db (works with devmfc kernel signing keys)
-update-alternatives --set regulatory.db /lib/firmware/regulatory.db-debian
-ln -sf /lib/firmware/regulatory.db.p7s-debian /etc/alternatives/regulatory.db.p7s
+# Use the UPSTREAM regulatory db (matches the kernel's compiled-in sforshee key)
+update-alternatives --set regulatory.db /lib/firmware/regulatory.db-upstream
+ln -sf /lib/firmware/regulatory.db.p7s-upstream /etc/alternatives/regulatory.db.p7s
 
-# Add to kernel cmdline (devmfc/debian-on-amlogic only)
+# Set the country at boot via the kernel cmdline (devmfc/debian-on-amlogic only).
 # Replace 6.x.y with your kernel version (e.g. kernel-6.12.30.config)
 echo 'bootargs8=cfg80211.ieee80211_regdom=VN' >> /boot/box-config/kernel-6.x.y.config
-
-# Run iw reg set VN just before wpa_supplicant starts
-mkdir -p /etc/systemd/system/wpa_supplicant@wlan0.service.d
-printf '[Service]\nExecStartPre=/sbin/iw reg set VN\n' > /etc/systemd/system/wpa_supplicant@wlan0.service.d/regdom.conf
-systemctl daemon-reload
 ```
 
 > Replace `VN` with your country code (e.g. `US`, `DE`, `JP`).
 >
 > **Verify after reboot:** `iw reg get | grep country` should show `country VN: DFS-FCC` (not `country 00`).
+> Check `dmesg | grep cfg80211` for signature errors if it stays at `00`.
 >
-> **Note on 5 GHz DFS after reboot:** Even with correct regulatory domain, DFS channels (e.g.
-> ch100 / 5500 MHz) may intermittently fail with AUTH timeout on non-Amlogic platforms.
-> **2.4 GHz is recommended for reliable persistent connection.**
-> If 5 GHz auto-connect fails after reboot, retry manually:
+> **Note on 5 GHz DFS after reboot:** DFS channels (e.g. ch100 / 5500 MHz) require a ~60 s Channel
+> Availability Check (CAC) before the radio can be used, so the chip cannot associate to 5 GHz
+> immediately at boot. The permanent setup below brings up 2.4 GHz first, then upgrades to 5 GHz
+> after CAC — or use the non-DFS router channel above to skip the wait entirely.
+
+**4. Create the per-interface wpa_supplicant config** `/etc/wpa_supplicant/wpa_supplicant-wlan0.conf`:
+
+The `wpa_supplicant@wlan0` systemd service (used below) reads this exact filename. Include
+`country=VN` and one `network` block per band. Use `priority=` so the higher value (5 GHz here)
+is preferred and 2.4 GHz is the fallback.
+
+```bash
+cat > /etc/wpa_supplicant/wpa_supplicant-wlan0.conf <<'EOF'
+ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+country=VN
+
+network={
+    ssid="YOUR_5G_SSID"
+    psk="YOUR_PASSWORD"
+    priority=10
+}
+
+network={
+    ssid="YOUR_24G_SSID"
+    psk="YOUR_PASSWORD"
+    priority=5
+}
+EOF
+chmod 600 /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
+```
+
+**5. Use ONE network stack — systemd-networkd + `wpa_supplicant@wlan0`:**
+
+This image (devmfc/debian-on-amlogic) already uses **systemd-networkd** for DHCP
+(`/etc/systemd/network/20-wlan0.network`). Let it keep doing DHCP, and let the
+per-interface `wpa_supplicant@wlan0.service` do the association. The `@wlan0` template binds to
+`wlan0.device`, so it starts only once the driver has created the interface — no boot-timing race.
+
+> **Important — do not run two managers.** `ifupdown` and `systemd-networkd` will fight over
+> wlan0 (each reboot connects differently or drops entirely). If you previously added an
+> `ifupdown` stanza, remove it:
 > ```bash
-> iw reg set VN
-> systemctl restart wpa_supplicant@wlan0
-> sleep 2
-> iw reg get | grep country
-> wpa_cli -i wlan0 status
+> rm -f /etc/network/interfaces.d/wlan0
 > ```
 
-**4. Save wpa_supplicant config to a permanent location:**
-
 ```bash
-# /etc/wpa_supplicant/wpa_supplicant-wlan0.conf may be a symlink — remove before copying
-rm -f /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
-cp /tmp/wpa.conf /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
+# Associate with wpa_supplicant@wlan0 (reads wpa_supplicant-wlan0.conf), let networkd do DHCP
+systemctl enable wpa_supplicant@wlan0.service
+systemctl disable wpa_supplicant 2>/dev/null   # avoid a second, global instance
 ```
 
-**5. Enable wpa_supplicant service on boot:**
+**6. (Optional) 5 GHz DFS auto-upgrade watchdog:**
+
+> **Skip this step if you used the non-DFS router channel option in step 3** — with a non-DFS
+> channel the chip connects to 5 GHz immediately and no watchdog is needed.
+
+At boot the chip's TX path needs a moment to calibrate and the 5 GHz DFS channel needs ~60 s of
+CAC, so `wpa_supplicant` may first land on 2.4 GHz (or temporarily disable both SSIDs after a few
+failed associations and sit in `SCANNING`). This watchdog gets you online immediately, then
+upgrades to 5 GHz once CAC completes. Skip it if your router uses a non-DFS 5 GHz channel.
 
 ```bash
-systemctl enable wpa_supplicant@wlan0
-systemctl start wpa_supplicant@wlan0
+cat > /usr/local/sbin/wlan0-watchdog.sh <<'EOF'
+#!/bin/sh
+I=wlan0
+W="/sbin/wpa_cli -i $I"
+# Phase 1: get any connection (wpa prefers 5 GHz via priority=10).
+# enable_network all clears wpa's temporary SSID block after early association failures.
+n=0
+while [ $n -lt 30 ]; do
+  $W status 2>/dev/null | grep -q wpa_state=COMPLETED && break
+  $W enable_network all >/dev/null 2>&1
+  $W reassociate >/dev/null 2>&1
+  n=$((n+1)); sleep 5
+done
+$W status 2>/dev/null | grep -q wpa_state=COMPLETED || exit 0
+# Already on 5 GHz? done.
+f=$($W status 2>/dev/null | grep ^freq= | cut -d= -f2)
+case "$f" in 5*) exit 0;; esac
+# On 2.4 GHz: wait for DFS CAC, then try to move to 5 GHz up to 3 times.
+sleep 60
+m=0
+while [ $m -lt 3 ]; do
+  $W enable_network all >/dev/null 2>&1
+  $W reassociate >/dev/null 2>&1
+  sleep 15
+  f=$($W status 2>/dev/null | grep ^freq= | cut -d= -f2)
+  case "$f" in 5*) exit 0;; esac
+  $W status 2>/dev/null | grep -q wpa_state=COMPLETED || $W reconnect >/dev/null 2>&1
+  m=$((m+1))
+done
+# Could not reach 5 GHz: keep 2.4 GHz, just make sure we are still connected.
+$W status 2>/dev/null | grep -q wpa_state=COMPLETED || { $W enable_network all >/dev/null 2>&1; $W reconnect >/dev/null 2>&1; }
+exit 0
+EOF
+chmod +x /usr/local/sbin/wlan0-watchdog.sh
+
+# Launch the watchdog in the background after wpa_supplicant@wlan0 starts (never blocks boot)
+mkdir -p /etc/systemd/system/wpa_supplicant@wlan0.service.d
+cat > /etc/systemd/system/wpa_supplicant@wlan0.service.d/wait-driver.conf <<'EOF'
+[Service]
+ExecStartPost=/bin/sh -c "/usr/local/sbin/wlan0-watchdog.sh &"
+EOF
+systemctl daemon-reload
 ```
 
-**6. Enable DHCP on wlan0 at boot** — create `/etc/network/interfaces.d/wlan0`:
+**7. Reboot and check:**
 
 ```bash
-mkdir -p /etc/network/interfaces.d
-printf 'auto wlan0\niface wlan0 inet dhcp\n' > /etc/network/interfaces.d/wlan0
+reboot
+# after ~90 s (chip init + CAC), check:
+systemctl status wpa_supplicant@wlan0.service --no-pager
+wpa_cli -i wlan0 status | grep -E 'wpa_state=|^freq=|^ssid='
+ip addr show wlan0
 ```
+
+> Expected: `wpa_state=COMPLETED`, an `inet 192.168.x.x` address, and `freq=5500` (5 GHz) once CAC
+> finishes — or `freq=2417` (2.4 GHz) if the DFS channel wasn't ready within the watchdog's window.
 
 > **Note on kernel updates:** If you update the kernel (e.g. `dpkg -i linux-image-*.deb`),
 > the manually installed `.ko` files will no longer match and WiFi will stop working after reboot.
@@ -251,7 +316,7 @@ printf 'auto wlan0\niface wlan0 inet dhcp\n' > /etc/network/interfaces.d/wlan0
 
 **`Failed to connect to non-global ctrl_ifname`**
 
-`wpa_supplicant` was started without `ctrl_interface`. Recreate the config with `ctrl_interface` as shown in step 5c.
+`wpa_supplicant` was started without `ctrl_interface`. Recreate the config with `ctrl_interface` as shown in step 4.
 
 **`wpa_state=ASSOCIATING` stuck / AUTH timeout**
 
@@ -264,20 +329,39 @@ Fix: add `country=VN` (or your country code) to the config file.
 
 **`nl80211: kernel reports: Match already configured`**
 
-A previous `wpa_supplicant` process is still running. Kill it first:
+A stale `wpa_supplicant` process is still holding wlan0. Restart the service to clear it:
 ```bash
-pkill wpa_supplicant
-sleep 1
-# then re-run wpa_supplicant
+sudo pkill wpa_supplicant
+sudo systemctl restart wpa_supplicant@wlan0.service
 ```
 
 **`ip link set wlan0 up` fails / wlan0 not visible**
 
-Modules not loaded yet. Run step 4 first.
+Modules not loaded yet. Run step 2 first.
+
+**`country 00` stuck after reboot / `loaded regulatory.db is malformed or signature is missing/invalid`**
+
+The kernel is verifying the regulatory db against a key it doesn't have. Switch to the **upstream**
+db (see section 4, step 3): `update-alternatives --set regulatory.db /lib/firmware/regulatory.db-upstream`
+and relink `regulatory.db.p7s-upstream`, then reboot. Confirm with `dmesg | grep cfg80211`.
+
+**Network drops entirely after reboot / `wpa_state=SCANNING`, `CTRL-EVENT-SSID-TEMP-DISABLED`**
+
+Two causes seen on this platform:
+1. Two network managers (`ifupdown` **and** `systemd-networkd`) both controlling wlan0 \u2014 they fight
+   and the result differs every boot. Use only one (see section 4, step 5; remove
+   `/etc/network/interfaces.d/wlan0`).
+2. `wpa_supplicant` started before the chip's TX path finished calibrating, failed to associate a few
+   times, and temporarily disabled all SSIDs. Recover manually, or use the watchdog in step 6:
+   ```bash
+   systemctl restart wpa_supplicant@wlan0.service
+   sleep 10
+   wpa_cli -i wlan0 status
+   ```
 
 ---
 
-## 6. MAC address
+## 5. MAC address
 
 On non-Amlogic platforms the driver reads the MAC from the chip's EFUSE registers.
 If EFUSE is blank (all zeros), the first boot generates a random MAC and now auto-persists it.
@@ -305,3 +389,27 @@ When building without `PROJ_NAME` set (default path), the Makefile automatically
   - Keeps `CONFIG_MAC_SUPPORT` enabled (driver can use `WIFIMAC_PATH`; fallback remains EFUSE/random if file/EFUSE is unavailable)
 - Disables `-Werror` to allow building against kernel 6.x headers without treating warnings as errors
 - Replaces removed `prandom_bytes()` with `get_random_bytes()` (API removed in kernel 6.11)
+
+---
+
+## Build a release manually (GitHub Actions)
+
+Releases are built automatically when a `v*` git tag is pushed. To build for a kernel version that
+has no release yet, trigger the workflow by hand:
+
+1. Repo → **Actions** tab → **Build and Release** → **Run workflow**.
+2. Fill in:
+   - **kernel_version** — your target `uname -r` (e.g. `6.12.30-meson64`).
+   - **headers_deb_url** — URL of the matching `linux-headers` `.deb` from the
+     [devmfc/debian-on-amlogic releases](https://github.com/devmfc/debian-on-amlogic/releases).
+   - **release_tag** — leave **empty** to only get a downloadable artifact, or set a tag
+     (e.g. `v6.12.30-meson64-1`) to publish a **Release** as well.
+
+Or with the GitHub CLI:
+
+```bash
+gh workflow run build-release.yml \
+  -f kernel_version=6.12.30-meson64 \
+  -f headers_deb_url=https://github.com/devmfc/debian-on-amlogic/releases/download/v6.12.30/linux-headers-6.12.30-meson64_20250522_arm64.deb \
+  -f release_tag=v6.12.30-meson64-1   # omit this flag to skip publishing a release
+```
