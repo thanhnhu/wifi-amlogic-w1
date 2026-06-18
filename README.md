@@ -26,8 +26,8 @@ sudo ./install.sh
 ```
 
 `install.sh` copies the modules, runs `depmod`, adds them to `/etc/modules` (auto-load on boot),
-and loads them immediately — i.e. it does [section 4](#4-install-and-connect-survive-reboot) steps 1
-and 2 for you. Next, continue from **section 4, step 3** to set up WiFi auto-connect.
+and loads them immediately — i.e. it does [section IV](#iv-install-and-connect-survive-reboot) steps 1
+and 2 for you. Next, continue from **section IV, step 3** to set up WiFi auto-connect.
 
 > The `.ko` files only load on the **exact** kernel they were built for. If there is no release
 > for your `uname -r`, build from source below. Releases are produced automatically by the
@@ -36,7 +36,7 @@ and 2 for you. Next, continue from **section 4, step 3** to set up WiFi auto-con
 
 ---
 
-## 1. Get the source
+## I. Get the source
 
 ```bash
 git clone https://github.com/thanhnhu/wifi-amlogic-w1.git
@@ -45,7 +45,7 @@ cd wifi-amlogic-w1
 
 ---
 
-## 2. Install kernel headers
+## II. Install kernel headers
 
 First, check your kernel version:
 
@@ -85,7 +85,7 @@ Headers are distributed as `.deb` files in the
 
 ---
 
-## 3. Build the driver
+## III. Build the driver
 
 ### 3a. Native build (on the target ARM64 board)
 
@@ -121,7 +121,7 @@ make -j4 driver
 
 ---
 
-## 4. Install and connect (survive reboot)
+## IV. Install and connect (survive reboot)
 
 **1. Install the kernel modules:**
 
@@ -363,14 +363,14 @@ or just wrap it: `sudo timeout 15 iw dev wlan0 scan`.
 **`country 00` stuck after reboot / `loaded regulatory.db is malformed or signature is missing/invalid`**
 
 The kernel is verifying the regulatory db against a key it doesn't have. Switch to the **upstream**
-db (see section 4, step 3): `update-alternatives --set regulatory.db /lib/firmware/regulatory.db-upstream`
+db (see section IV, step 3): `update-alternatives --set regulatory.db /lib/firmware/regulatory.db-upstream`
 and relink `regulatory.db.p7s-upstream`, then reboot. Confirm with `dmesg | grep cfg80211`.
 
 **Network drops entirely after reboot / `wpa_state=SCANNING`, `CTRL-EVENT-SSID-TEMP-DISABLED`**
 
 Two causes seen on this platform:
 1. Two network managers (`ifupdown` **and** `systemd-networkd`) both controlling wlan0 \u2014 they fight
-   and the result differs every boot. Use only one (see section 4, step 5; remove
+   and the result differs every boot. Use only one (see section IV, step 5; remove
    `/etc/network/interfaces.d/wlan0`).
 2. `wpa_supplicant` started before the chip's TX path finished calibrating, failed to associate a few
    times, and temporarily disabled all SSIDs. Recover manually, or use the watchdog in step 6:
@@ -382,7 +382,7 @@ Two causes seen on this platform:
 
 ---
 
-## 5. Prefer WiFi 5 GHz over wired LAN (optional)
+## V. Prefer WiFi 5 GHz over wired LAN (optional)
 
 Many of these TV boxes have a **100 Mbps Fast Ethernet** port (not Gigabit), so a good 5 GHz WiFi
 link is actually **faster** than the cable. But when both `eth0` and `wlan0` are up, the kernel
@@ -442,7 +442,7 @@ ip route get 8.8.8.8             # should say "dev wlan0"
 
 ---
 
-## 6. MAC address
+## VI. MAC address
 
 On non-Amlogic platforms the driver reads the MAC from the chip's EFUSE registers.
 If EFUSE is blank (all zeros), the first boot generates a random MAC and now auto-persists it.
