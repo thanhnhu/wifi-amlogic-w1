@@ -144,8 +144,17 @@ sudo modprobe vlsicomm
 
 # Bring up the interface and find your SSID names for the config below
 sudo ip link set wlan0 up
-iw dev wlan0 scan | grep -E 'SSID|freq'
+sudo timeout 15 iw dev wlan0 scan | grep -E 'SSID|freq'
 ```
+
+> **`iw dev wlan0 scan` hangs?** This command only works while **no one else owns wlan0**. If you
+> already set up `wpa_supplicant@wlan0` (steps 4–5), it is holding the interface and the chip will
+> not run a second, parallel scan — `iw scan` then blocks forever (hence the `timeout 15` wrapper
+> above, which makes it give up instead of hanging). Ask the running `wpa_supplicant` to scan
+> instead:
+> ```bash
+> wpa_cli -i wlan0 scan && sleep 3 && wpa_cli -i wlan0 scan_results
+> ```
 
 **3. Set regulatory domain on boot** (required for 5 GHz DFS channels):
 
@@ -340,6 +349,17 @@ sudo systemctl restart wpa_supplicant@wlan0.service
 
 Modules not loaded yet. Run step 2 first.
 
+**`iw dev wlan0 scan` hangs forever**
+
+`wpa_supplicant` (or NetworkManager) is already holding wlan0, and the chip won't run a second,
+parallel scan. This is expected once steps 4–5 are done — it does **not** mean a conflict. Use the
+running supplicant to scan instead:
+```bash
+wpa_cli -i wlan0 scan && sleep 3 && wpa_cli -i wlan0 scan_results
+```
+To force `iw` to work, stop the holder first (`sudo systemctl stop wpa_supplicant@wlan0.service`),
+or just wrap it: `sudo timeout 15 iw dev wlan0 scan`.
+
 **`country 00` stuck after reboot / `loaded regulatory.db is malformed or signature is missing/invalid`**
 
 The kernel is verifying the regulatory db against a key it doesn't have. Switch to the **upstream**
@@ -362,7 +382,67 @@ Two causes seen on this platform:
 
 ---
 
-## 5. MAC address
+## 5. Prefer WiFi 5 GHz over wired LAN (optional)
+
+Many of these TV boxes have a **100 Mbps Fast Ethernet** port (not Gigabit), so a good 5 GHz WiFi
+link is actually **faster** than the cable. But when both `eth0` and `wlan0` are up, the kernel
+sends all internet traffic over whichever default route has the **lower metric** — and `eth0`
+usually wins by default. To prefer 5 GHz WiFi, give `wlan0` a **lower** route metric than `eth0`.
+
+**1. See the current default routes and their metrics:**
+
+```bash
+ip route | grep default
+# e.g.  default via 192.168.1.1 dev eth0  metric 100
+#       default via 192.168.1.1 dev wlan0 metric 600   ← higher = lower priority
+```
+
+**2. Find the `.network` file managing `eth0`:**
+
+```bash
+networkctl status eth0 | grep -i 'Network File'
+ls -l /etc/systemd/network/
+```
+
+**3. Set the metrics** (WiFi lower than LAN). Edit the section in each file, or append with bash
+(run `bash` first if your shell is fish):
+
+```bash
+# WiFi = high priority (low metric)
+cat >> /etc/systemd/network/20-wlan0.network <<'EOF'
+
+[DHCPv4]
+RouteMetric=100
+EOF
+
+# LAN = low priority (high metric) — replace 10-eth0.network with the file from step 2
+cat >> /etc/systemd/network/10-eth0.network <<'EOF'
+
+[DHCPv4]
+RouteMetric=600
+EOF
+```
+
+> If a file already has a `[DHCPv4]` section, don't add a second one — just put the
+> `RouteMetric=` line inside the existing section (edit with `nano`).
+
+**4. Apply and verify:**
+
+```bash
+systemctl restart systemd-networkd
+sleep 3
+ip route | grep default          # wlan0 should now have the lower metric
+ip route get 8.8.8.8             # should say "dev wlan0"
+```
+
+> **Automatic failover stays intact:** keep the LAN cable plugged in. If WiFi drops, its default
+> route disappears and the kernel falls back to `eth0` automatically — then returns to WiFi once
+> 5 GHz is back. Only lower the LAN priority **after** 5 GHz associates reliably (ideally on a
+> non-DFS channel 36–48), otherwise a flaky DFS link will be slower than the cable.
+
+---
+
+## 6. MAC address
 
 On non-Amlogic platforms the driver reads the MAC from the chip's EFUSE registers.
 If EFUSE is blank (all zeros), the first boot generates a random MAC and now auto-persists it.
