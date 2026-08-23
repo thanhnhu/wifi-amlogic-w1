@@ -2,6 +2,10 @@
 
 Out-of-tree Linux kernel module for the Amlogic W155S1 (chip ID `0x8888`) WiFi SDIO card.
 
+> **Bluetooth too?** The W155S1 is a combo chip — its BT core is driven by the companion repo
+> [aml_bt](https://github.com/thanhnhu/aml_bt), which builds on top of this driver.
+> See [section VII](#vii-bluetooth-optional).
+
 ## Compatibility
 
 ### Kernels
@@ -479,6 +483,40 @@ To set a specific persistent MAC manually, write it to the active path (or adjus
 ```bash
 echo "aa:bb:cc:dd:ee:ff" > /etc/wifimac.txt
 ```
+
+---
+
+## VII. Bluetooth (optional)
+
+The W155S1 is a **combo chip**: the same die carries a Bluetooth core. It is not handled by this
+driver, but it depends on it — the BT core has no power rail of its own and is switched on by
+poking the chip's PMU registers **over this driver's SDIO link**. HCI then runs over a separate
+UART.
+
+```
+aml_sdio.ko ──SDIO──> [ W155S1 : WiFi core | BT core ]
+                                              │
+sdio_bt.ko  ──SDIO──> PMU power-on            │ UART
+                                              ▼
+aml_hciattach ──/dev/ttyS7──> firmware download ──> hci0
+```
+
+That is what [**thanhnhu/aml_bt**](https://github.com/thanhnhu/aml_bt) provides. It links against
+symbols exported here (`g_w1_hif_ops`, `host_wake_w1_req`, `aml_wifi_sdio_power_lock`,
+`set_wifi_bt_sdio_driver_bit`, ...), so **install this WiFi driver first** — `sdio_bt.ko` will not
+load otherwise.
+
+The two coexist safely: `set_wifi_bt_sdio_driver_bit()` refcounts WiFi and BT, so the shared SDIO
+power driver is only torn down once *both* are unloaded.
+
+```bash
+# after WiFi works:
+git clone -b 6.18.40 https://github.com/thanhnhu/aml_bt.git
+cd aml_bt && sudo ./scripts/install-w1-bt.sh && sudo reboot
+```
+
+Tested on the same Magicsee N5 Max X4 (S905X4) — BT 5.0, BLE + Classic. Note that it also needs a
+small device-tree patch, which its README explains.
 
 ---
 
