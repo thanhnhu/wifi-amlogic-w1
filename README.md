@@ -4,6 +4,8 @@ Out-of-tree Linux kernel module for the Amlogic W155S1 (chip ID `0x8888`) WiFi S
 
 ## Compatibility
 
+### Kernels
+
 | Kernel | Status |
 |--------|--------|
 | 4.14 – 5.15 | Original target (Amlogic Android/BSP kernels) |
@@ -11,6 +13,26 @@ Out-of-tree Linux kernel module for the Amlogic W155S1 (chip ID `0x8888`) WiFi S
 | 6.x — mainline | Supported |
 | 6.13 – 6.18 | Supported (ccflags-y, cfg80211/timer/hrtimer/crypto API updates, version-guarded) |
 | 6.x — [devmfc/debian-on-amlogic](https://github.com/devmfc/debian-on-amlogic) (`*-meson64`) | **Tested OK** — kernels 6.12.30-meson64 and 6.18.40-meson64, 2.4 GHz + 5 GHz DFS connected |
+
+### Devices (TV boxes)
+
+Any Amlogic TV box whose WiFi module is the **W155S1 / W155S2 (chip ID `0x8888`)** on the SDIO bus,
+for example:
+
+| TV box | SoC | Status |
+|--------|-----|--------|
+| Magicsee N5 Max X4 | S905X4 | **Tested OK** — 2.4 GHz + 5 GHz |
+| X96 Max+ / X96 Max Plus (X4 variants) | S905X4 | Expected to work (same W155S1 SDIO module) |
+| Other S905X4 / S905X2 / S922X boxes | S905X4, S905X2, S922X | Expected to work if the WiFi chip ID is `0x8888` |
+
+**Check your device before building** — the driver only matches chip ID `0x8888`:
+
+```bash
+# Vendor/device of the SDIO WiFi card
+cat /sys/bus/sdio/devices/*/{vendor,device} 2>/dev/null
+# After loading the module, the chip ID is printed in the kernel log
+dmesg | grep -i -E 'aml_|w155|8888'
+```
 
 ---
 
