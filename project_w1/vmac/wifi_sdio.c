@@ -1511,7 +1511,7 @@ static void config_pmu_reg(bool is_power_on)
     }
 }
 
-extern unsigned char set_wifi_bt_sdio_driver_bit(bool is_register, int shift);
+extern void set_wifi_bt_sdio_driver_bit(bool is_register, int shift);
 extern unsigned char w1_sdio_driver_insmoded;
 extern unsigned char w1_sdio_after_porbe;
 extern int  aml_w1_sdio_init(void);
