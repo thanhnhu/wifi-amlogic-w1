@@ -7,13 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       kernel_version:
-        description: 'Target kernel version (uname -r), e.g. 6.12.30-meson64'
+        description: 'Target kernel version (uname -r), e.g. 6.18.40-meson64'
         required: true
-        default: '6.12.30-meson64'
+        default: '6.18.40-meson64'
       headers_deb_url:
         description: 'URL to the matching linux-headers .deb (arm64)'
         required: true
-        default: 'https://github.com/devmfc/debian-on-amlogic/releases/download/v6.12.30/linux-headers-6.12.30-meson64_20250522_arm64.deb'
+        default: 'https://github.com/devmfc/debian-on-amlogic/releases/download/v6.18.40/linux-headers-6.18.40-meson64_20260726_arm64.deb'
       release_tag:
         description: 'Create a Release with this tag (leave empty to only upload an artifact)'
         required: false
@@ -23,8 +23,8 @@ permissions:
   contents: write
 
 env:
-  DEFAULT_KVER: '6.12.30-meson64'
-  DEFAULT_HEADERS_URL: 'https://github.com/devmfc/debian-on-amlogic/releases/download/v6.12.30/linux-headers-6.12.30-meson64_20250522_arm64.deb'
+  DEFAULT_KVER: '6.18.40-meson64'
+  DEFAULT_HEADERS_URL: 'https://github.com/devmfc/debian-on-amlogic/releases/download/v6.18.40/linux-headers-6.18.40-meson64_20260726_arm64.deb'
 
 jobs:
   build:

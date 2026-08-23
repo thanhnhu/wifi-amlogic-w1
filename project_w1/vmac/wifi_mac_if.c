@@ -1539,8 +1539,12 @@ void wifi_mac_tx_lock_timer_attach(void)
     struct drv_private *drv_priv = drv_get_drv_priv();
 
     lock_kt = ktime_set(0, 1500000 * drv_priv->drv_config.cfg_hrtimer_interval);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0))
+    hrtimer_setup(&hr_lock_timer, wifi_mac_set_tx_lock_timeout, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+#else
     hrtimer_init(&hr_lock_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
     hr_lock_timer.function = wifi_mac_set_tx_lock_timeout;
+#endif
     hrtimer_start(&hr_lock_timer, lock_kt, HRTIMER_MODE_REL);
     g_hr_lock_timer_valid = 1;
 }

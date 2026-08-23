@@ -1123,8 +1123,12 @@ wifi_mac_scan_chk_leakap_done_process(struct hrtimer *timer)
 
 void wifi_mac_scan_chk_leakap_hrtimer_attach(struct wifi_mac *wifimac)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0))
+    hrtimer_setup(&wifimac->wm_scan->scan_hr_timer, wifi_mac_scan_chk_leakap_done_process, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+#else
     hrtimer_init(&wifimac->wm_scan->scan_hr_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
     wifimac->wm_scan->scan_hr_timer.function = wifi_mac_scan_chk_leakap_done_process;
+#endif
 }
 
 

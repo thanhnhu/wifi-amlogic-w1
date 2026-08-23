@@ -689,7 +689,9 @@ minstrel_init_cck_rates(struct minstrel_priv *mp)
 {
 	static const int bitrates[4] = { 10, 20, 55, 110 };
 	struct ieee80211_supported_band *sband;
-	u32 rate_flags = ieee80211_chandef_rate_flags(&mp->hw->conf.chandef);
+	/* ieee80211_chandef_rate_flags() was removed from mac80211 (6.x); it
+	 * returns 0 for standard 20/40/80 MHz channels, so keep rate_flags = 0. */
+	u32 rate_flags = 0;
 	int i, j;
 
 	sband = mp->hw->wiphy->bands[NL80211_BAND_2GHZ];

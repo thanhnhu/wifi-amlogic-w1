@@ -9,7 +9,8 @@ Out-of-tree Linux kernel module for the Amlogic W155S1 (chip ID `0x8888`) WiFi S
 | 4.14 – 5.15 | Original target (Amlogic Android/BSP kernels) |
 | 5.15+ | Supported (VFS import namespace added) |
 | 6.x — mainline | Supported |
-| 6.x — [devmfc/debian-on-amlogic](https://github.com/devmfc/debian-on-amlogic) (`*-meson64`) | **Tested OK** — kernel 6.12.30-meson64, 2.4 GHz + 5 GHz DFS connected |
+| 6.13 – 6.18 | Supported (ccflags-y, cfg80211/timer/hrtimer/crypto API updates, version-guarded) |
+| 6.x — [devmfc/debian-on-amlogic](https://github.com/devmfc/debian-on-amlogic) (`*-meson64`) | **Tested OK** — kernels 6.12.30-meson64 and 6.18.40-meson64, 2.4 GHz + 5 GHz DFS connected |
 
 ---
 
@@ -73,13 +74,13 @@ Headers are distributed as `.deb` files in the
 **Steps:**
 
 1. Go to https://github.com/devmfc/debian-on-amlogic/releases and find the release
-   matching your kernel version (e.g. `v6.12.30`).
+   matching your kernel version (e.g. `v6.12.30` or `v6.18.40`).
 
 2. Download and install the headers `.deb`:
    ```bash
    # Replace the filename with the one from the matching release
-   wget https://github.com/devmfc/debian-on-amlogic/releases/download/v6.12.30/linux-headers-6.12.30-meson64_20250522_arm64.deb
-   sudo dpkg -i linux-headers-6.12.30-meson64_20250522_arm64.deb
+   wget https://github.com/devmfc/debian-on-amlogic/releases/download/v6.18.40/linux-headers-6.18.40-meson64_20260726_arm64.deb
+   sudo dpkg -i linux-headers-6.18.40-meson64_20260726_arm64.deb
    sudo apt install build-essential
    ```
 

@@ -196,6 +196,11 @@ endif#CONFIG_CFG80211
 TARGET_LIST := $(filter-out $(DISCARD), $(TARGET_FILE))
 $(TARGET)-objs = $(TARGET_LIST)
 
+# Kernel 6.13+ removed the EXTRA_CFLAGS->ccflags-y backward-compat mapping from
+# scripts/Makefile.lib. Re-add it here, AFTER all EXTRA_CFLAGS additions above:
+# kbuild pre-sets ccflags-y as a simply-expanded var, so += expands immediately.
+ccflags-y += $(EXTRA_CFLAGS)
+
 else
 
 modules:

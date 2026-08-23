@@ -27,7 +27,9 @@
 #include "wifi_mac_tx_reg.h"
 #include "wifi_drv_capture.h"
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
+MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
 MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
 #endif
 
@@ -2180,7 +2182,11 @@ exit:
     return ret;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0))
+static int vm_cfg80211_set_wiphy_params(struct wiphy *wiphy, int radio_idx, unsigned int changed)
+#else
 static int vm_cfg80211_set_wiphy_params(struct wiphy *wiphy, unsigned int changed)
+#endif
 {
     struct wlan_net_vif *wnet_vif = wiphy_to_adapter(wiphy);
     unsigned short retry_short = 0;
@@ -2327,6 +2333,9 @@ vm_cfg80211_leave_ibss(struct wiphy *wiphy, struct net_device *dev)
 static int
 vm_cfg80211_set_tx_power(struct wiphy *wiphy,
     struct wireless_dev *wdev,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0))
+    int radio_idx,
+#endif
     enum nl80211_tx_power_setting type, int dbm)
 {
     struct wlan_net_vif *wnet_vif = wiphy_to_adapter(wiphy);
@@ -2342,7 +2351,11 @@ vm_cfg80211_set_tx_power(struct wiphy *wiphy,
 
 static int
 vm_cfg80211_get_tx_power(struct wiphy *wiphy,
-    struct wireless_dev *wdev, int *dbm)
+    struct wireless_dev *wdev,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0))
+    int radio_idx, unsigned int link_id,
+#endif
+    int *dbm)
 {
     struct wlan_net_vif *wnet_vif = wiphy_to_adapter(wiphy);
     struct wifi_mac *wifimac = wnet_vif->vm_wmac;
@@ -5314,8 +5327,13 @@ vm_cfg80211_set_txq_params(struct wiphy *wiphy, struct net_device *dev,
     return 0;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0))
+static int
+vm_cfg80211_set_antenna(struct wiphy *wiphy, int radio_idx, unsigned int tx_ant, unsigned int rx_ant)
+#else
 static int
 vm_cfg80211_set_antenna(struct wiphy *wiphy, unsigned int tx_ant, unsigned int rx_ant)
+#endif
 {
     ERROR_DEBUG_OUT("no support yet \n");
     return -1;
@@ -5493,8 +5511,13 @@ vm_cfg80211_channel_switch(struct wiphy *wiphy, struct net_device *dev,
     return -1;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0))
+static int
+vm_cfg80211_get_antenna(struct wiphy *wiphy, int radio_idx, unsigned int *tx_ant, unsigned int *rx_ant)
+#else
 static int
 vm_cfg80211_get_antenna(struct wiphy *wiphy, unsigned int *tx_ant, unsigned int *rx_ant)
+#endif
 {
     ERROR_DEBUG_OUT("no support yet \n");
     return -1;
@@ -5556,6 +5579,9 @@ vm_cfg80211_set_cqm_txe_cfg(struct wiphy *wiphy,struct net_device *dev,
 
 static int
 vm_cfg80211_set_monitor_channel(struct wiphy *wiphy,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0))
+                                struct net_device *dev,
+#endif
                                 struct cfg80211_chan_def *chandef)
 {
     struct wlan_net_vif *wnet_vif = wiphy_to_adapter(wiphy);
