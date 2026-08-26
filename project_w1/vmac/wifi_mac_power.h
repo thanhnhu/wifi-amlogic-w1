@@ -133,7 +133,7 @@ struct wifi_mac_pwrsave_t
     struct os_timer_ext       ips_timer_presleep;
     unsigned int               ips_inactivitytime;
     spinlock_t              ips_lock;
-    unsigned long   ips_lockflags;
+    unsigned long   ips_lockflags[NR_CPUS];
     OS_MUTEX                ips_mutex;
 
     struct os_timer_ext       ips_timer_sleep_wait;
@@ -152,8 +152,8 @@ struct wifi_mac_pwrsave_t
 #define WIFINET_PWRSAVE_MUTEX_UNLOCK(_wnet_vif) OS_MUTEX_UNLOCK(&(_wnet_vif)->vm_pwrsave.ips_mutex);
 
 #define WIFINET_PWRSAVE_LOCK_INIT(_wnet_vif)       spin_lock_init(&(_wnet_vif)->vm_pwrsave.ips_lock)
-#define WIFINET_PWRSAVE_LOCK(_wnet_vif) OS_SPIN_LOCK_IRQ(&(_wnet_vif)->vm_pwrsave.ips_lock, (_wnet_vif)->vm_pwrsave.ips_lockflags)
-#define WIFINET_PWRSAVE_UNLOCK(_wnet_vif) OS_SPIN_UNLOCK_IRQ(&(_wnet_vif)->vm_pwrsave.ips_lock, (_wnet_vif)->vm_pwrsave.ips_lockflags)
+#define WIFINET_PWRSAVE_LOCK(_wnet_vif) OS_SPIN_LOCK_IRQ(&(_wnet_vif)->vm_pwrsave.ips_lock, (_wnet_vif)->vm_pwrsave.ips_lockflags[raw_smp_processor_id()])
+#define WIFINET_PWRSAVE_UNLOCK(_wnet_vif) OS_SPIN_UNLOCK_IRQ(&(_wnet_vif)->vm_pwrsave.ips_lock, (_wnet_vif)->vm_pwrsave.ips_lockflags[raw_smp_processor_id()])
 
 struct wifi_mac;
 struct wlan_net_vif;

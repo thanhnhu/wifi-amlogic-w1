@@ -176,8 +176,8 @@ struct nsta_entry
 
 
 #define WIFINET_NODE_FREE_LOCK_INIT(_ic) spin_lock_init(&(_ic)->wm_free_lock)
-#define WIFINET_NODE_FREE_LOCK(_ic) OS_SPIN_LOCK_IRQ(&(_ic)->wm_free_lock, (_ic)->wm_free_lock_flags)
-#define WIFINET_NODE_FREE_UNLOCK(_ic) OS_SPIN_UNLOCK_IRQ(&(_ic)->wm_free_lock, (_ic)->wm_free_lock_flags)
+#define WIFINET_NODE_FREE_LOCK(_ic) OS_SPIN_LOCK_IRQ(&(_ic)->wm_free_lock, (_ic)->wm_free_lock_flags[raw_smp_processor_id()])
+#define WIFINET_NODE_FREE_UNLOCK(_ic) OS_SPIN_UNLOCK_IRQ(&(_ic)->wm_free_lock, (_ic)->wm_free_lock_flags[raw_smp_processor_id()])
 
 #define NETCOM_NETIF_RUNNING  0x01
 #define NETCOM_NETIF_IFF_RUNNING  0x08
@@ -385,15 +385,15 @@ struct wifi_mac
     spinlock_t wm_comlock;
     spinlock_t wm_wnet_vifslock;
     spinlock_t wm_queuelock;
-    unsigned long wm_queuelock_flags;
+    unsigned long wm_queuelock_flags[NR_CPUS];
     spinlock_t wm_scanlock;
-    unsigned long wm_scanlock_flags;
+    unsigned long wm_scanlock_flags[NR_CPUS];
     OS_MUTEX wm_bcnbuflock;
     spinlock_t wm_pslock;
-    unsigned long wm_pslock_flags;
+    unsigned long wm_pslock_flags[NR_CPUS];
     spinlock_t wm_stalock;
     spinlock_t wm_free_lock;
-    unsigned long wm_free_lock_flags;
+    unsigned long wm_free_lock_flags[NR_CPUS];
     spinlock_t wm_amsdu_tasklet_lock;
 
     int wnet_vif_num;
@@ -457,7 +457,7 @@ struct wifi_mac
     struct drv_txdesc *txdesc_bufptr;/* TX descriptors buffer point*/
     struct list_head txdesc_freequeue;/* transmit buffer */
     spinlock_t tx_desc_buf_lock;
-    unsigned long tx_desc_buf_lock_flags;
+    unsigned long tx_desc_buf_lock_flags[NR_CPUS];
 
     int wm_uapsd_qid;
     int wm_noqos_legacy_qid;

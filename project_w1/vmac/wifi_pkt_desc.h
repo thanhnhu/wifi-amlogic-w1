@@ -137,8 +137,8 @@ struct wifi_mac_tx_info
 
 #define TX_DESC_BUF_LOCK_INIT(_sc) spin_lock_init(&(_sc)->tx_desc_buf_lock)
 #define TX_DESC_BUF_LOCK_DESTROY(_sc)
-#define TX_DESC_BUF_LOCK(_sc) do {OS_SPIN_LOCK_IRQ(&(_sc)->tx_desc_buf_lock,(_sc)->tx_desc_buf_lock_flags);}while(0)
-#define TX_DESC_BUF_UNLOCK(_sc) do{OS_SPIN_UNLOCK_IRQ(&(_sc)->tx_desc_buf_lock,(_sc)->tx_desc_buf_lock_flags);}while(0)
+#define TX_DESC_BUF_LOCK(_sc) do {OS_SPIN_LOCK_IRQ(&(_sc)->tx_desc_buf_lock,(_sc)->tx_desc_buf_lock_flags[raw_smp_processor_id()]);}while(0)
+#define TX_DESC_BUF_UNLOCK(_sc) do{OS_SPIN_UNLOCK_IRQ(&(_sc)->tx_desc_buf_lock,(_sc)->tx_desc_buf_lock_flags[raw_smp_processor_id()]);}while(0)
 
 extern struct drv_txdesc *wifi_mac_alloc_txdesc(struct wifi_mac *wifimac);
 extern void wifi_mac_recycle_txdesc(struct sk_buff *skbbuf);

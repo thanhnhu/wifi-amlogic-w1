@@ -274,7 +274,7 @@ struct vm_wdev_priv
 
     struct cfg80211_connect_params *connect_request;
     spinlock_t connect_req_lock;
-    unsigned long connect_req_lock_flags;
+    unsigned long connect_req_lock_flags[NR_CPUS];
     struct os_timer_ext connect_timeout;
 
     struct net_device *pmon_ndev;

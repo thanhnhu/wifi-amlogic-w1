@@ -23,8 +23,8 @@
  * Definitions for the amlogic power control module.
  */
 #define DRV_PS_LOCK_INIT(_sc)  spin_lock_init(&(_sc)->drv_ps.ps_pwrsave_lock)
-#define DRV_PS_LOCK(_sc)  OS_SPIN_LOCK_IRQ(&(_sc)->drv_ps.ps_pwrsave_lock, (_sc)->drv_ps.__ilockflags)
-#define DRV_PS_UNLOCK(_sc)  OS_SPIN_UNLOCK_IRQ(&(_sc)->drv_ps.ps_pwrsave_lock, (_sc)->drv_ps.__ilockflags)
+#define DRV_PS_LOCK(_sc)  OS_SPIN_LOCK_IRQ(&(_sc)->drv_ps.ps_pwrsave_lock, (_sc)->drv_ps.__ilockflags[raw_smp_processor_id()])
+#define DRV_PS_UNLOCK(_sc)  OS_SPIN_UNLOCK_IRQ(&(_sc)->drv_ps.ps_pwrsave_lock, (_sc)->drv_ps.__ilockflags[raw_smp_processor_id()])
 
 enum drv_ps_state
 {

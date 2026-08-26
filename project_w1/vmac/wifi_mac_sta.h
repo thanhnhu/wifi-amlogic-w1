@@ -325,7 +325,7 @@ struct wifi_station_tbl
 {
     struct wifi_mac *nt_wmac;
     rwlock_t nt_nstalock;
-    unsigned long nt_nsta_lock_flags;
+    unsigned long nt_nsta_lock_flags[NR_CPUS];
     struct list_head nt_nsta;
     struct list_head nt_wds_hash[WIFINET_NODE_HASHSIZE];
     const char *nt_name;
@@ -439,20 +439,20 @@ int wifi_mac_sta_arp_agent_ex (SYS_TYPE param1, SYS_TYPE param2,SYS_TYPE param3,
 #define WIFINET_UNLOCK(_ic) OS_SPIN_UNLOCK_IRQ(&(_ic)->wm_comlock, __ilockflags); } while (0)
 
 #define WIFINET_QLOCK_INIT(_ic, _name) spin_lock_init(&(_ic)->wm_queuelock)
-#define WIFINET_QLOCK(_ic) OS_SPIN_LOCK_IRQ(&(_ic)->wm_queuelock, (_ic)->wm_queuelock_flags);
-#define WIFINET_QUNLOCK(_ic) OS_SPIN_UNLOCK_IRQ(&(_ic)->wm_queuelock,  (_ic)->wm_queuelock_flags);
+#define WIFINET_QLOCK(_ic) OS_SPIN_LOCK_IRQ(&(_ic)->wm_queuelock, (_ic)->wm_queuelock_flags[raw_smp_processor_id()]);
+#define WIFINET_QUNLOCK(_ic) OS_SPIN_UNLOCK_IRQ(&(_ic)->wm_queuelock,  (_ic)->wm_queuelock_flags[raw_smp_processor_id()]);
 
 #define WIFINET_BEACONLOCK_INIT(_ic, _name) spin_lock_init(&(_ic)->wm_scanlock)
-#define WIFINET_BEACONLOCK(_ic) OS_SPIN_LOCK_IRQ(&(_ic)->wm_scanlock, (_ic)->wm_scanlock_flags);
-#define WIFINET_BEACONUNLOCK(_ic) OS_SPIN_UNLOCK_IRQ(&(_ic)->wm_scanlock,  (_ic)->wm_scanlock_flags);
+#define WIFINET_BEACONLOCK(_ic) OS_SPIN_LOCK_IRQ(&(_ic)->wm_scanlock, (_ic)->wm_scanlock_flags[raw_smp_processor_id()]);
+#define WIFINET_BEACONUNLOCK(_ic) OS_SPIN_UNLOCK_IRQ(&(_ic)->wm_scanlock,  (_ic)->wm_scanlock_flags[raw_smp_processor_id()]);
 
 #define WIFINET_BEACONBUFLOCK_INIT(_ic, _name) mutex_init(&(_ic)->wm_bcnbuflock)
 #define WIFINET_BEACONBUF_LOCK(_ic) OS_MUTEX_LOCK(&(_ic)->wm_bcnbuflock);
 #define WIFINET_BEACONBUF_UNLOCK(_ic) OS_MUTEX_UNLOCK(&(_ic)->wm_bcnbuflock);
 
 #define WIFINET_PSLOCK_INIT(_ic, _name) spin_lock_init(&(_ic)->wm_pslock)
-#define WIFINET_PSLOCK(_ic) OS_SPIN_LOCK_IRQ(&(_ic)->wm_pslock, (_ic)->wm_pslock_flags);
-#define WIFINET_PSUNLOCK(_ic) OS_SPIN_UNLOCK_IRQ(&(_ic)->wm_pslock,  (_ic)->wm_pslock_flags);
+#define WIFINET_PSLOCK(_ic) OS_SPIN_LOCK_IRQ(&(_ic)->wm_pslock, (_ic)->wm_pslock_flags[raw_smp_processor_id()]);
+#define WIFINET_PSUNLOCK(_ic) OS_SPIN_UNLOCK_IRQ(&(_ic)->wm_pslock,  (_ic)->wm_pslock_flags[raw_smp_processor_id()]);
 
 #define WIFINET_FW_STAT_LOCK_INIT(_ic, _name) spin_lock_init(&(_ic)->fw_stat_lock)
 #define WIFINET_FW_STAT_LOCK_DESTROY(_ic, _name)
@@ -484,8 +484,8 @@ int wifi_mac_sta_arp_agent_ex (SYS_TYPE param1, SYS_TYPE param2,SYS_TYPE param3,
 
 #define WIFINET_NODE_LOCK_INIT(_nt) rwlock_init(&(_nt)->nt_nstalock)
 #define WIFINET_NODE_LOCK_DESTROY(_nt)
-#define WIFINET_NODE_LOCK(_nt) OS_WRITE_LOCK_IRQ((&(_nt)->nt_nstalock), (_nt)->nt_nsta_lock_flags)
-#define WIFINET_NODE_UNLOCK(_nt) OS_WRITE_UNLOCK_IRQ((&(_nt)->nt_nstalock), (_nt)->nt_nsta_lock_flags)
+#define WIFINET_NODE_LOCK(_nt) OS_WRITE_LOCK_IRQ((&(_nt)->nt_nstalock), (_nt)->nt_nsta_lock_flags[raw_smp_processor_id()])
+#define WIFINET_NODE_UNLOCK(_nt) OS_WRITE_UNLOCK_IRQ((&(_nt)->nt_nstalock), (_nt)->nt_nsta_lock_flags[raw_smp_processor_id()])
 
 #define ACL_LOCK_INIT(_as, _name) spin_lock_init(&(_as)->as_lock)
 #define ACL_LOCK_DESTROY(_as)

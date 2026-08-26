@@ -3082,11 +3082,11 @@ static int vm_cfg80211_connect(struct wiphy *wiphy, struct net_device *dev,
         wifi_mac_top_sm(wnet_vif, WIFINET_S_SCAN, 0);
     }
 
-    OS_SPIN_LOCK_IRQ(&pwdev_priv->connect_req_lock,pwdev_priv->connect_req_lock_flags);
+    OS_SPIN_LOCK_IRQ(&pwdev_priv->connect_req_lock,pwdev_priv->connect_req_lock_flags[raw_smp_processor_id()]);
     wnet_vif->vm_mainsta->connect_status = CONNECT_IDLE;
     pwdev_priv->connect_request = sme;
     os_timer_ex_start(&pwdev_priv->connect_timeout);
-    OS_SPIN_UNLOCK_IRQ(&pwdev_priv->connect_req_lock,pwdev_priv->connect_req_lock_flags);
+    OS_SPIN_UNLOCK_IRQ(&pwdev_priv->connect_req_lock,pwdev_priv->connect_req_lock_flags[raw_smp_processor_id()]);
 
 exit:
     DPRINTF(AML_DEBUG_CFG80211, "%s %d\n", __func__, __LINE__);

@@ -55,28 +55,33 @@
 
 #define DRV_TX_TIMEOUT_LOCK_INIT(_sc) spin_lock_init(&(_sc)->drv_tx_timeout_lock)
 #define DRV_TX_TIMEOUT_LOCK_DESTROY(_sc)
-#define DRV_TX_TIMEOUT_LOCK(_sc) do {OS_SPIN_LOCK_IRQ(&(_sc)->drv_tx_timeout_lock,(_sc)->drv_tx_timeout_lock_flags);}while(0)
-#define DRV_TX_TIMEOUT_UNLOCK(_sc) do{OS_SPIN_UNLOCK_IRQ(&(_sc)->drv_tx_timeout_lock,(_sc)->drv_tx_timeout_lock_flags);}while(0)
+#define DRV_TX_TIMEOUT_LOCK(_sc) do {OS_SPIN_LOCK_IRQ(&(_sc)->drv_tx_timeout_lock,(_sc)->drv_tx_timeout_lock_flags[raw_smp_processor_id()]);}while(0)
+#define DRV_TX_TIMEOUT_UNLOCK(_sc) do{OS_SPIN_UNLOCK_IRQ(&(_sc)->drv_tx_timeout_lock,(_sc)->drv_tx_timeout_lock_flags[raw_smp_processor_id()]);}while(0)
 
 #define DRV_TXQ_LOCK_INIT(_tq) spin_lock_init(&(_tq)->txlist_lock)
 #define DRV_TXQ_LOCK_DESTROY(_tq)
-#define DRV_TXQ_LOCK(_tq) do { OS_SPIN_LOCK_IRQ(&(_tq)->txlist_lock, (_tq)->txlist_lockflags);} while(0)
-#define DRV_TXQ_UNLOCK(_tq) do { OS_SPIN_UNLOCK_IRQ(&(_tq)->txlist_lock, (_tq)->txlist_lockflags);} while(0)
+/* spin_lock_irqsave stores the caller's interrupt state before it acquires the
+ * lock, so a second CPU spinning here used to overwrite the state of the CPU
+ * that held it, and the unlock then restored the wrong one - which is how a CPU
+ * ended up with interrupts off for good. A lock is always released on the CPU
+ * that took it, so one slot per CPU is enough to keep them apart. */
+#define DRV_TXQ_LOCK(_tq) do { OS_SPIN_LOCK_IRQ(&(_tq)->txlist_lock, (_tq)->txlist_lockflags[raw_smp_processor_id()]);} while(0)
+#define DRV_TXQ_UNLOCK(_tq) do { OS_SPIN_UNLOCK_IRQ(&(_tq)->txlist_lock, (_tq)->txlist_lockflags[raw_smp_processor_id()]);} while(0)
 
 #define DRV_TX_BACKUPQ_LOCK_INIT(_tq) spin_lock_init(&(_tq)->txlist_backupq_lock)
 #define DRV_TX_BACKUPQ_LOCK_DESTROY(_tq)
-#define DRV_TX_BACKUPQ_LOCK(_tq) do { OS_SPIN_LOCK_IRQ(&(_tq)->txlist_backupq_lock, (_tq)->txlist_backupq_lockflags);} while(0)
-#define DRV_TX_BACKUPQ_UNLOCK(_tq) do { OS_SPIN_UNLOCK_IRQ(&(_tq)->txlist_backupq_lock, (_tq)->txlist_backupq_lockflags);} while(0)
+#define DRV_TX_BACKUPQ_LOCK(_tq) do { OS_SPIN_LOCK_IRQ(&(_tq)->txlist_backupq_lock, (_tq)->txlist_backupq_lockflags[raw_smp_processor_id()]);} while(0)
+#define DRV_TX_BACKUPQ_UNLOCK(_tq) do { OS_SPIN_UNLOCK_IRQ(&(_tq)->txlist_backupq_lock, (_tq)->txlist_backupq_lockflags[raw_smp_processor_id()]);} while(0)
 
 #define DRV_TX_NORMAL_BUF_LOCK_INIT(_sc) spin_lock_init(&(_sc)->drv_normal_buf_lock)
 #define DRV_TX_NORMAL_BUF_DESTROY(_sc)
-#define DRV_TX_NORMAL_BUF_LOCK(_sc) do {OS_SPIN_LOCK_IRQ(&(_sc)->drv_normal_buf_lock, (_sc)->drv_normal_buf_lock_flags);}while(0)
-#define DRV_TX_NORMAL_BUF_UNLOCK(_sc) do{OS_SPIN_UNLOCK_IRQ(&(_sc)->drv_normal_buf_lock,(_sc)->drv_normal_buf_lock_flags);}while(0)
+#define DRV_TX_NORMAL_BUF_LOCK(_sc) do {OS_SPIN_LOCK_IRQ(&(_sc)->drv_normal_buf_lock, (_sc)->drv_normal_buf_lock_flags[raw_smp_processor_id()]);}while(0)
+#define DRV_TX_NORMAL_BUF_UNLOCK(_sc) do{OS_SPIN_UNLOCK_IRQ(&(_sc)->drv_normal_buf_lock,(_sc)->drv_normal_buf_lock_flags[raw_smp_processor_id()]);}while(0)
 
 #define DRV_TX_QUEUE_LOCK_INIT(_sc) spin_lock_init(&(_sc)->drv_tx_queue_lock)
 #define DRV_TX_QUEUE_DESTROY(_sc)
-#define DRV_TX_QUEUE_LOCK(_sc) do {OS_SPIN_LOCK_IRQ(&(_sc)->drv_tx_queue_lock, (_sc)->drv_tx_queue_lock_flags);}while(0)
-#define DRV_TX_QUEUE_UNLOCK(_sc) do{OS_SPIN_UNLOCK_IRQ(&(_sc)->drv_tx_queue_lock,(_sc)->drv_tx_queue_lock_flags);}while(0)
+#define DRV_TX_QUEUE_LOCK(_sc) do {OS_SPIN_LOCK_IRQ(&(_sc)->drv_tx_queue_lock, (_sc)->drv_tx_queue_lock_flags[raw_smp_processor_id()]);}while(0)
+#define DRV_TX_QUEUE_UNLOCK(_sc) do{OS_SPIN_UNLOCK_IRQ(&(_sc)->drv_tx_queue_lock,(_sc)->drv_tx_queue_lock_flags[raw_smp_processor_id()]);}while(0)
 
 #define DRV_HRTIMER_LOCK_INIT(_tq) spin_lock_init(&(_tq)->hr_timer_lock)
 #define DRV_HRTIMER_LOCK_DESTROY(_tq)
@@ -85,8 +90,8 @@
 
 #define DRV_MINSTREL_LOCK_INIT(_tq) spin_lock_init(&(_tq)->minstrel_lock)
 #define DRV_MINSTREL_LOCK_DESTROY(_tq)
-#define DRV_MINSTREL_LOCK(_tq) do { OS_SPIN_LOCK_IRQ(&(_tq)->minstrel_lock, (_tq)->minstrel_lockflags);} while(0)
-#define DRV_MINSTREL_UNLOCK(_tq) do { OS_SPIN_UNLOCK_IRQ(&(_tq)->minstrel_lock, (_tq)->minstrel_lockflags);} while(0)
+#define DRV_MINSTREL_LOCK(_tq) do { OS_SPIN_LOCK_IRQ(&(_tq)->minstrel_lock, (_tq)->minstrel_lockflags[raw_smp_processor_id()]);} while(0)
+#define DRV_MINSTREL_UNLOCK(_tq) do { OS_SPIN_UNLOCK_IRQ(&(_tq)->minstrel_lock, (_tq)->minstrel_lockflags[raw_smp_processor_id()]);} while(0)
 
 /*
  * returns delimiter padding required given the packet length
@@ -226,10 +231,11 @@ struct drv_txlist
     unsigned int txlist_qnum;    /* hardware q number */
     struct list_head txlist_q;       /* transmit queue ptxdesc have send to hal*/
     spinlock_t txlist_lock;    /* lock on q and link */
-    unsigned long txlist_lockflags;   /* intr state when must cli */
+    /* one interrupt-state slot per CPU; see DRV_TXQ_LOCK */
+    unsigned long txlist_lockflags[NR_CPUS];   /* intr state when must cli */
 
     spinlock_t txlist_backupq_lock;
-    unsigned long txlist_backupq_lockflags;
+    unsigned long txlist_backupq_lockflags[NR_CPUS];
 
     unsigned long txlist_lock_cnt;
     unsigned long txlist_unlock_cnt;
@@ -530,7 +536,7 @@ struct drv_powersave
 {
     unsigned int ps_hal_usecount;
     OS_LOCK ps_pwrsave_lock;
-    unsigned long __ilockflags;
+    unsigned long __ilockflags[NR_CPUS];
 };
 
 struct drv_private
@@ -549,11 +555,11 @@ struct drv_private
     unsigned short drv_ampdu_buffer_count[2];
 
     spinlock_t drv_normal_buf_lock;
-    unsigned long drv_normal_buf_lock_flags;
+    unsigned long drv_normal_buf_lock_flags[NR_CPUS];
     spinlock_t drv_tx_queue_lock;
-    unsigned long drv_tx_queue_lock_flags;
+    unsigned long drv_tx_queue_lock_flags[NR_CPUS];
     spinlock_t drv_tx_timeout_lock;
-    unsigned long drv_tx_timeout_lock_flags;
+    unsigned long drv_tx_timeout_lock_flags[NR_CPUS];
 
     unsigned int drv_txqueue_map;
     struct drv_txlist drv_txlist_table[HAL_NUM_TX_QUEUES];
@@ -598,7 +604,7 @@ struct drv_private
     struct aml_ratecontrol minstrel_sample_rate[DRV_TXDESC_RATE_NUM];
     spinlock_t hr_timer_lock;
     spinlock_t minstrel_lock;
-    unsigned long minstrel_lockflags;
+    unsigned long minstrel_lockflags[NR_CPUS];
 };
 
 #ifdef CONFIG_P2P
