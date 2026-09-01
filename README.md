@@ -5,6 +5,9 @@ Out-of-tree Linux kernel module for the Amlogic W155S1 (chip ID `0x8888`) WiFi S
 > **Bluetooth too?** The W155S1 is a combo chip — its BT core is driven by the companion repo
 > [aml_bt](https://github.com/thanhnhu/aml_bt), which builds on top of this driver.
 > See [section VII](#vii-bluetooth-optional).
+>
+> **Front panel dark?** Unrelated to WiFi, but same box: see
+> [Bonus — front-panel LED display](#bonus--front-panel-led-display-magicsee-n5-max-x4).
 
 ## Compatibility
 
@@ -517,6 +520,84 @@ cd aml_bt && sudo ./scripts/install-w1-bt.sh && sudo reboot
 
 Tested on the same Magicsee N5 Max X4 (S905X4) — BT 5.0, BLE + Classic. Note that it also needs a
 small device-tree patch, which its README explains.
+
+---
+
+## Bonus — front-panel LED display (Magicsee N5 Max X4)
+
+Unrelated to WiFi, but the same box, the same class of problem: on devmfc's Debian image the
+4-digit front panel stays dark and only the power LED is lit.
+
+**Why:** the image boots `meson-sc2-x96x4.dtb` because it is the closest match for this board, but
+that DTB describes the *X96 X4* panel — a **TM1628** on 3 wires (`GPIOA_14` / `GPIOA_15` /
+`GPIOD_10`). The Magicsee N5 Max X4 actually carries an **FD6551** driven over **2 wires** on
+`GPIOD_6` / `GPIOD_7`, with no strobe line. Wrong chip, wrong pins, wrong protocol — so the
+`tm16xx` driver talks to nothing. The power LED you still see is a discrete LED wired straight to
+the board, not to the display controller, which is why it survives.
+
+| | DTB as shipped (X96 X4) | Magicsee N5 Max X4 |
+|---|---|---|
+| controller | `devmfc,tm1628`, 3-wire | **`devmfc,fd6551`, 2-wire** |
+| clk | `GPIOA_15` (line 1) | **`GPIOD_6` (line 35)** |
+| dat | `GPIOA_14` (line 0) | **`GPIOD_7` (line 36)** |
+| stb | `GPIOD_10` (line 39) | *not used* |
+| segment map | driver default (TM1628) | **`map6`** (T95 family, from `tm16xx-map.sh`) |
+
+**Fix:**
+
+```bash
+sudo ./scripts/enable-front-panel-led.sh
+sudo reboot
+# after the reboot, confirm the panel renders correctly
+sudo ./scripts/enable-front-panel-led.sh --test
+```
+
+Three things get installed, and the split is deliberate:
+
+| What | Where | Why not somewhere simpler |
+|------|-------|---------------------------|
+| device-tree patch | the DTB u-boot actually loads | this image's `boot.scr` has no `fdt apply`, so **overlays are not an option** — the DTB has to be edited in place |
+| segment map | `front-panel-led-map.service` + its own udev rule | the obvious spot, `/usr/lib/tm16xx-display/display_service.sh`, belongs to the `tm16xx-display` package and an update would silently revert an in-file patch |
+| re-patch on kernel update | `/etc/kernel/postinst.d/zz-front-panel-led` | every `linux-image` package ships its own unpatched `/boot/dtb-<version>/` tree, so without this the panel dies at the next kernel upgrade |
+
+Backups are kept as `*.pre-vfd`; `--revert` restores them and removes the service, rule and hook.
+
+> **Why a map service at all?** The `tm16xx` driver derives its segment map at probe time from a
+> built-in TM1628 default and offers no device-tree property to override it, so the correct map has
+> to be written to `/sys/.../mapping` from userspace on every boot.
+
+> **Why a udev rule instead of `Wants=`/`After=` on the device unit?** Because pointing a unit at
+> `sys-devices-platform-tm1628.device` makes systemd *expect* that device before udev delivers the
+> uevent, and the vendor's own `SYSTEMD_WANTS` rule then never fires — leaving
+> `tm16xx-display.service` dead. The script uses the same mechanism the vendor does.
+
+**Verified end to end** on kernel 6.18.40-meson64: after a reboot both
+`tm16xx-display.service` and `front-panel-led-map.service` come up on their own, and the kernel log
+shows the driver auto-detecting the 2-wire bus:
+
+```
+tm16xx tm1628: DEVMFC: tm16xx driver v1.97 probe
+tm16xx tm1628: Get stb GPIO failed: -2, assuming two wire protocol
+```
+
+> `display_service.sh` logs two harmless `tm16xx::power: No such file or directory` lines per boot —
+> this panel has no POWER icon, and the file is left untouched on purpose (see the table above).
+
+> **Different box?** The pin numbers come from the stock Android openvfd config for this model
+> ([magicsee-n5-max-x4-vfd.conf](https://github.com/arthur-liberman/vfd-configurations/blob/master/magicsee-n5-max-x4-vfd.conf)),
+> where `vfd_gpio_clk='0,35,0'` and `vfd_gpio_dat='0,36,0'` index into
+> `dt-bindings/gpio/meson-sc2-gpio.h`. Find the `*-vfd.conf` for your box in that repo and override
+> the defaults:
+> ```bash
+> sudo VFD_COMPATIBLE=devmfc,tm1650 VFD_CLK=31 VFD_DAT=30 ./scripts/enable-front-panel-led.sh
+> ```
+> The driver understands `devmfc,tm1628` (3-wire), `devmfc,fd6551` and `devmfc,tm1650` (2-wire).
+> If the panel lights up but the segments are scrambled, pick a different `map1`..`map6` from
+> `/usr/lib/tm16xx-display/tm16xx-map.sh` and pass it as `VFD_MAP`.
+
+> **Do not run `systemctl stop tm16xx-display`.** That unit is declared `DefaultDependencies=no`
+> and stopping it reboots the box. Stop the display loop with
+> `sudo rm -f /run/tm16xx.run` instead (the script does this for you).
 
 ---
 
