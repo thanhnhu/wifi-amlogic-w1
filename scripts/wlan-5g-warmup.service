@@ -1,0 +1,13 @@
+[Unit]
+Description=W1 WiFi: warm up on 2.4 GHz, then join the 5 GHz (DFS) network
+After=wpa_supplicant@wlan0.service
+Requires=wpa_supplicant@wlan0.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/wlan-5g-warmup.sh
+TimeoutStartSec=8min
+
+[Install]
+# runs every time wpa_supplicant@wlan0 starts (boot, restart)
+WantedBy=wpa_supplicant@wlan0.service

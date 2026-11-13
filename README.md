@@ -197,8 +197,8 @@ sudo timeout 15 iw dev wlan0 scan | grep -E 'SSID|freq'
 >
 > Benefits:
 >
-> - No CAC wait → the chip associates to 5 GHz **immediately at boot**, so the 5 GHz watchdog in
->   step 6 below becomes unnecessary (you can skip it).
+> - No DFS TX block → the chip associates to 5 GHz **immediately at boot**, so the 5 GHz warm-up
+>   service in step 6 below becomes unnecessary (you can skip it).
 > - More stable: DFS channels can force the AP off-air for radar avoidance; non-DFS channels don't.
 >
 > You should still set the correct country/regulatory domain below so the non-DFS channels are
@@ -225,10 +225,11 @@ echo 'bootargs8=cfg80211.ieee80211_regdom=VN' >> /boot/box-config/kernel-6.x.y.c
 > **Verify after reboot:** `iw reg get | grep country` should show `country VN: DFS-FCC` (not `country 00`).
 > Check `dmesg | grep cfg80211` for signature errors if it stays at `00`.
 >
-> **Note on 5 GHz DFS after reboot:** DFS channels (e.g. ch100 / 5500 MHz) require a ~60 s Channel
-> Availability Check (CAC) before the radio can be used, so the chip cannot associate to 5 GHz
-> immediately at boot. The permanent setup below brings up 2.4 GHz first, then upgrades to 5 GHz
-> after CAC — or use the non-DFS router channel above to skip the wait entirely.
+> **Note on 5 GHz DFS after reboot:** after a cold boot the W1 firmware does **not transmit on a DFS
+> channel** (e.g. ch52 / 5260 MHz, ch100 / 5500 MHz) until the chip has completed one connection on
+> 2.4 GHz. The AP is found by the scan, but every AUTH frame is dropped without being sent (TX status
+> `4` = `AGED`), and this can last many minutes — waiting for CAC alone does not fix it. Step 6 below
+> works around it automatically; the non-DFS router channel above avoids it entirely.
 
 **4. Create the per-interface wpa_supplicant config** `/etc/wpa_supplicant/wpa_supplicant-wlan0.conf`:
 
@@ -277,73 +278,54 @@ systemctl enable wpa_supplicant@wlan0.service
 systemctl disable wpa_supplicant 2>/dev/null   # avoid a second, global instance
 ```
 
-**6. (Optional) 5 GHz DFS auto-upgrade watchdog:**
+**6. (Optional) 5 GHz DFS warm-up at boot:**
 
 > **Skip this step if you used the non-DFS router channel option in step 3** — with a non-DFS
-> channel the chip connects to 5 GHz immediately and no watchdog is needed.
+> channel the chip connects to 5 GHz immediately.
 
-At boot the chip's TX path needs a moment to calibrate and the 5 GHz DFS channel needs ~60 s of
-CAC, so `wpa_supplicant` may first land on 2.4 GHz (or temporarily disable both SSIDs after a few
-failed associations and sit in `SCANNING`). This watchdog gets you online immediately, then
-upgrades to 5 GHz once CAC completes. Skip it if your router uses a non-DFS 5 GHz channel.
+After a cold boot the firmware will not transmit on a DFS channel until it has completed one
+connection on 2.4 GHz (see the note in step 3). `wpa_supplicant` alone therefore loops on
+`CTRL-EVENT-DISCONNECTED reason=0` / `SSID-TEMP-DISABLED` for a long time. The one-shot
+`wlan-5g-warmup` service fixes this: each time `wpa_supplicant@wlan0` starts it connects to the
+2.4 GHz SSID for a few seconds, then selects the 5 GHz SSID, which then associates at once. It runs
+once and exits — no background loop — and never rewrites the wpa_supplicant config.
 
 ```bash
-cat > /usr/local/sbin/wlan0-watchdog.sh <<'EOF'
-#!/bin/sh
-I=wlan0
-W="/sbin/wpa_cli -i $I"
-# Phase 1: get any connection (wpa prefers 5 GHz via priority=10).
-# enable_network all clears wpa's temporary SSID block after early association failures.
-n=0
-while [ $n -lt 30 ]; do
-  $W status 2>/dev/null | grep -q wpa_state=COMPLETED && break
-  $W enable_network all >/dev/null 2>&1
-  $W reassociate >/dev/null 2>&1
-  n=$((n+1)); sleep 5
-done
-$W status 2>/dev/null | grep -q wpa_state=COMPLETED || exit 0
-# Already on 5 GHz? done.
-f=$($W status 2>/dev/null | grep ^freq= | cut -d= -f2)
-case "$f" in 5*) exit 0;; esac
-# On 2.4 GHz: wait for DFS CAC, then try to move to 5 GHz up to 3 times.
-sleep 60
-m=0
-while [ $m -lt 3 ]; do
-  $W enable_network all >/dev/null 2>&1
-  $W reassociate >/dev/null 2>&1
-  sleep 15
-  f=$($W status 2>/dev/null | grep ^freq= | cut -d= -f2)
-  case "$f" in 5*) exit 0;; esac
-  $W status 2>/dev/null | grep -q wpa_state=COMPLETED || $W reconnect >/dev/null 2>&1
-  m=$((m+1))
-done
-# Could not reach 5 GHz: keep 2.4 GHz, just make sure we are still connected.
-$W status 2>/dev/null | grep -q wpa_state=COMPLETED || { $W enable_network all >/dev/null 2>&1; $W reconnect >/dev/null 2>&1; }
-exit 0
-EOF
-chmod +x /usr/local/sbin/wlan0-watchdog.sh
-
-# Launch the watchdog in the background after wpa_supplicant@wlan0 starts (never blocks boot)
-mkdir -p /etc/systemd/system/wpa_supplicant@wlan0.service.d
-cat > /etc/systemd/system/wpa_supplicant@wlan0.service.d/wait-driver.conf <<'EOF'
-[Service]
-ExecStartPost=/bin/sh -c "/usr/local/sbin/wlan0-watchdog.sh &"
-EOF
-systemctl daemon-reload
+sudo install -m 755 scripts/wlan-5g-warmup.sh /usr/local/sbin/wlan-5g-warmup.sh
+sudo install -m 644 scripts/wlan-5g-warmup.service /etc/systemd/system/wlan-5g-warmup.service
+sudo install -m 644 scripts/wlan-5g-warmup.default /etc/default/wlan-5g-warmup
+sudo nano /etc/default/wlan-5g-warmup      # set SSID_24, SSID_5 (and KEEP_24G)
+sudo systemctl daemon-reload
+sudo systemctl enable wlan-5g-warmup.service
 ```
+
+`KEEP_24G` chooses what happens to 2.4 GHz afterwards:
+
+| `KEEP_24G` | After reaching 5 GHz | Use when |
+|---|---|---|
+| `0` (default) | 2.4 GHz stays disabled; used only for the warm-up | Bluetooth is in use (e.g. Home Assistant BLE scanning) — the shared radio makes 2.4 GHz WiFi drop most of its TX frames. Also set `disabled=1` on the 2.4 GHz block in `wpa_supplicant-wlan0.conf` |
+| `1` | 2.4 GHz re-enabled as a fallback (lower `priority`) | No heavy Bluetooth use |
+
+For a 5 GHz-only setup also add `autoscan=periodic:5` to `wpa_supplicant-wlan0.conf`, so
+`wpa_supplicant` rescans every 5 s while disconnected.
+
+> Replaces the older `wlan0-watchdog.sh` from previous versions of this README, which waited for
+> CAC and could not get past the DFS TX block. If you installed it, remove it:
+> `sudo rm -f /etc/systemd/system/wpa_supplicant@wlan0.service.d/wait-driver.conf /usr/local/sbin/wlan0-watchdog.sh && sudo systemctl daemon-reload`
 
 **7. Reboot and check:**
 
 ```bash
 reboot
-# after ~90 s (chip init + CAC), check:
-systemctl status wpa_supplicant@wlan0.service --no-pager
+# after ~60 s, check:
+journalctl -b -t wlan-5g-warmup          # attempt 1: warming up ... / connected to ... (freq 5260)
 wpa_cli -i wlan0 status | grep -E 'wpa_state=|^freq=|^ssid='
 ip addr show wlan0
 ```
 
-> Expected: `wpa_state=COMPLETED`, an `inet 192.168.x.x` address, and `freq=5500` (5 GHz) once CAC
-> finishes — or `freq=2417` (2.4 GHz) if the DFS channel wasn't ready within the watchdog's window.
+> Expected: `wpa_state=COMPLETED`, an `inet 192.168.x.x` address and `freq=5xxx`. Tested on a
+> Magicsee N5 Max X4 (6.18.40-meson64) with the AP on DFS ch52: 5 GHz up ~35 s after boot, on the
+> first attempt.
 
 > **Note on kernel updates:** If you update the kernel (e.g. `dpkg -i linux-image-*.deb`),
 > the manually installed `.ko` files will no longer match and WiFi will stop working after reboot.
@@ -366,6 +348,14 @@ wifi_mac_mgmt_tx_timeout vm_state AUTH
 
 Cause: missing `country=` in config, or DFS channel restrictions.
 Fix: add `country=VN` (or your country code) to the config file.
+
+If `country=` is already set and the AP is on a DFS channel, check the TX status of the AUTH frames:
+```bash
+dmesg | grep drv_tx_complete_mgmt_handle | tail
+# drv_tx_complete_mgmt_handle, txdesc_frame_flag:7, status=4, rate:04
+```
+`status=4` (`TX_DESCRIPTOR_STATUS_AGED`) means the firmware never sent the frame — the cold-boot DFS
+TX block described in step 3. Use the warm-up service in step 6, or move the AP to channel 36–48.
 
 **`nl80211: kernel reports: Match already configured`**
 
@@ -402,8 +392,9 @@ Two causes seen on this platform:
 1. Two network managers (`ifupdown` **and** `systemd-networkd`) both controlling wlan0 \u2014 they fight
    and the result differs every boot. Use only one (see section IV, step 5; remove
    `/etc/network/interfaces.d/wlan0`).
-2. `wpa_supplicant` started before the chip's TX path finished calibrating, failed to associate a few
-   times, and temporarily disabled all SSIDs. Recover manually, or use the watchdog in step 6:
+2. The AP is on a DFS 5 GHz channel and the firmware is still blocking TX after a cold boot, so
+   `wpa_supplicant` failed a few times and temporarily disabled the SSID. Use the warm-up service in
+   step 6, or recover manually:
    ```bash
    systemctl restart wpa_supplicant@wlan0.service
    sleep 10
@@ -612,6 +603,20 @@ When building without `PROJ_NAME` set (default path), the Makefile automatically
   - Keeps `CONFIG_MAC_SUPPORT` enabled (driver can use `WIFIMAC_PATH`; fallback remains EFUSE/random if file/EFUSE is unavailable)
 - Disables `-Werror` to allow building against kernel 6.x headers without treating warnings as errors
 - Replaces removed `prandom_bytes()` with `get_random_bytes()` (API removed in kernel 6.11)
+
+### Module parameter `dfs_dwell_ms`
+
+Passive dwell time per DFS channel during a scan, in ms (clamped to 100–500, default **210**). The
+vendor driver used a fixed 100 ms — shorter than the standard 102.4 ms beacon interval — so a scan
+often missed an AP on a DFS channel. 210 ms covers two beacons; a full scan takes ~1.5 s longer.
+This makes the AP *visible* sooner; it does not lift the cold-boot DFS TX block (see section IV,
+step 6).
+
+```bash
+cat /sys/module/vlsicomm/parameters/dfs_dwell_ms            # current value
+echo 250 | sudo tee /sys/module/vlsicomm/parameters/dfs_dwell_ms   # change at runtime
+echo 'options vlsicomm dfs_dwell_ms=250' | sudo tee /etc/modprobe.d/vlsicomm.conf  # persist
+```
 
 ---
 

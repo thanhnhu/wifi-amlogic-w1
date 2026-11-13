@@ -1178,7 +1178,8 @@ void wifi_mac_scan_channel(struct wifi_mac *wifimac)
 
     if (!((wifimac->wm_nrunning == 2) && (!concurrent_check_is_vmac_same_pri_channel(wifimac)))) {
         if (chan->chan_flags & WIFINET_CHAN_DFS) {
-            os_timer_ex_start_period(&ss->ss_scan_timer, WIFINET_SCAN_DEFAULT_INTERVAL);
+            /* passive listen: must cover at least one 102.4 ms beacon interval */
+            os_timer_ex_start_period(&ss->ss_scan_timer, aml_wifi_get_dfs_dwell_ms());
 
         } else {
             os_timer_ex_start_period(&ss->ss_scan_timer, ss->scan_chan_wait);

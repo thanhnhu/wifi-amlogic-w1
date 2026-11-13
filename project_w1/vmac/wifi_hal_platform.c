@@ -812,6 +812,10 @@ int aml_debug = AML_DEBUG_LEVEL;
 const unsigned char BROADCAST_ADDRESS[WIFINET_ADDR_LEN] =  {0xff,0xff,0xff,0xff,0xff,0xff};
 static char * mac_addr = "00:01:02:58:00:CC";
 static char * country_code = "WW";
+/* Passive dwell time on DFS channels during a scan. The vendor default (100 ms)
+ * is shorter than the standard 102.4 ms beacon interval, so a scan often misses
+ * an AP on a DFS channel (e.g. ch52) and connecting to it takes several scans. */
+static unsigned int dfs_dwell_ms = 210;
 unsigned short dhcp_offload = 0;
 static int sdblksize = BLKSIZE;
 unsigned char aml_insmod_flag = 0;
@@ -928,6 +932,17 @@ void aml_wifi_set_mac_addr(void)
 char * aml_wifi_get_country_code(void)
 {
     return country_code;
+}
+
+unsigned int aml_wifi_get_dfs_dwell_ms(void)
+{
+    unsigned int ms = READ_ONCE(dfs_dwell_ms);
+
+    if (ms < 100)
+        return 100;
+    if (ms > 500)
+        return 500;
+    return ms;
 }
 
 int aml_wifi_get_vif0_opmode(void)
@@ -1109,6 +1124,10 @@ MODULE_PARM_DESC(dhcp_offload,"A short variable to control dhcp offload function
 
 module_param(country_code,charp,0644);
 MODULE_PARM_DESC(country_code,"A string variable to describe country code");
+
+/*Usage: insmod ***.ko dfs_dwell_ms=xxx (or write /sys/module/vlsicomm/parameters/dfs_dwell_ms)*/
+module_param(dfs_dwell_ms, uint, 0644);
+MODULE_PARM_DESC(dfs_dwell_ms, "Passive scan dwell time on DFS channels in ms (100-500, default 210)");
 
 
 #endif
