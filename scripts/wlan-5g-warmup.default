@@ -1,9 +1,0 @@
-# /etc/default/wlan-5g-warmup
-IFACE=wlan0
-# SSIDs exactly as in /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
-SSID_24="YOUR_24G_SSID"
-SSID_5="YOUR_5G_SSID"
-# 1 = keep 2.4 GHz enabled as a fallback after reaching 5 GHz
-# 0 = 5 GHz only (2.4 GHz is used just for the warm-up; avoids WiFi/Bluetooth
-#     coexistence trouble on 2.4 GHz when the Bluetooth core is busy)
-KEEP_24G=0

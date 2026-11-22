@@ -677,6 +677,8 @@ int wifi_mac_beacon_alloc(void * ieee, int wnet_vif_id)
     int len;
 
     wnet_vif = wifi_mac_get_wnet_vif_by_vid(wifimac, wnet_vif_id);
+    if (wnet_vif == NULL)
+        return -EINVAL;
     WIFINET_BEACONBUF_LOCK(wifimac);
 
     skbbuf = wnet_vif->vm_beaconbuf;
@@ -751,6 +753,8 @@ void wifi_mac_beacon_free(void * ieee, int wnet_vif_id)
     struct wlan_net_vif *wnet_vif = NULL;
 
     wnet_vif = wifi_mac_get_wnet_vif_by_vid(wifimac, wnet_vif_id);
+    if (wnet_vif == NULL)
+        return;
     if (wnet_vif->vm_beaconbuf != NULL)
     {
         struct sk_buff * skbbuf = ( struct sk_buff *)wnet_vif->vm_beaconbuf;

@@ -73,6 +73,7 @@ jobs:
           OUT="aml-w1-${KVER}"
           mkdir -p "dist/${OUT}"
           cp project_w1/vmac/aml_sdio.ko project_w1/vmac/vlsicomm.ko "dist/${OUT}/"
+          cp project_w1/vmac/aml_wifi_rf*.txt "dist/${OUT}/"
           cp scripts/install.sh "dist/${OUT}/"
           chmod +x "dist/${OUT}/install.sh"
           echo "$KVER" > "dist/${OUT}/KERNEL_VERSION"

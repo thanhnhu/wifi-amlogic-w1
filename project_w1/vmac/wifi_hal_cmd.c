@@ -44,7 +44,13 @@ MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
 MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
 #endif
 
-#define WIFI_CONF_PATH "/vendor/etc/wifi/w1"
+/* Relative to the firmware search path: /lib/firmware/aml/aml_wifi_rf_<sn>.txt,
+ * where linux-firmware / ophub firmware install them. The Android path
+ * /vendor/etc/wifi/w1 does not exist on Linux; without the RF file the chip gets
+ * no calibration and no 5 GHz TX power table until a first 2.4 GHz connection,
+ * so 5 GHz AUTH frames are dropped (TX status 4) after every cold boot.
+ * Override with: options vlsicomm conf_path=<dir> */
+#define WIFI_CONF_PATH "aml"
 
 static char * conf_path = WIFI_CONF_PATH;
 module_param(conf_path, charp, S_IRUGO);

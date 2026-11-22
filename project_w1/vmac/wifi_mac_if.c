@@ -971,14 +971,14 @@ wifi_mac_get_wnet_vif_by_vid(struct wifi_mac *wifimac, int wnet_vif_id)
 {
     struct wlan_net_vif *wnet_vif = NULL;
 
+    /* list_for_each_entry() leaves the cursor pointing into wifimac itself when
+     * nothing matches; callers test for NULL, so return NULL explicitly. */
     list_for_each_entry(wnet_vif, &wifimac->wm_wnet_vifs, vm_next)
     {
         if (wnet_vif->wnet_vif_id == wnet_vif_id)
-        {
-            break;
-        }
+            return wnet_vif;
     }
-    return wnet_vif;
+    return NULL;
 }
 
 #if 0

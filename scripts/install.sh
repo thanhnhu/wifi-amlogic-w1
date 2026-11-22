@@ -30,6 +30,11 @@ mkdir -p "$DEST"
 cp "$DIR/aml_sdio.ko" "$DIR/vlsicomm.ko" "$DEST/"
 depmod -a
 
+# RF calibration files, read by vlsicomm as aml/aml_wifi_rf_<module SN>.txt
+echo "Installing RF calibration files to /lib/firmware/aml"
+mkdir -p /lib/firmware/aml
+cp "$DIR"/aml_wifi_rf*.txt /lib/firmware/aml/
+
 # Auto-load on boot (load aml_sdio first, then vlsicomm).
 for m in aml_sdio vlsicomm; do
   grep -qxF "$m" /etc/modules 2>/dev/null || echo "$m" >> /etc/modules
