@@ -473,7 +473,7 @@ the board, not to the display controller, which is why it survives.
 | clk | `GPIOA_15` (line 1) | **`GPIOD_6` (line 35)** |
 | dat | `GPIOA_14` (line 0) | **`GPIOD_7` (line 36)** |
 | stb | `GPIOD_10` (line 39) | *not used* |
-| segment map | driver default (TM1628) | **`map6`** (T95 family, from `tm16xx-map.sh`) |
+| segment map | driver default (TM1628) | **`map6`** (T95 family, from `tm16xx-map.sh`), colon moved to byte 0 bit 4 |
 
 **Fix:**
 

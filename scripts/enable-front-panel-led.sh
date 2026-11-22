@@ -32,14 +32,15 @@ VFD_CLK="${VFD_CLK:-35}"          # GPIOD_6
 VFD_DAT="${VFD_DAT:-36}"          # GPIOD_7
 VFD_GPIO_FLAGS="${VFD_GPIO_FLAGS:-0x06}"
 
-# map6 from /usr/lib/tm16xx-display/tm16xx-map.sh: 5 digits, reverse order, FD6551 (T95 family).
+# map6 from /usr/lib/tm16xx-display/tm16xx-map.sh (5 digits, reverse order, FD6551, T95 family),
+# with the colon moved from byte 0 bit 1 (the USB icon on this panel) to bit 4 (04).
 # Each byte is (display-RAM byte index << 4) | bit index; 0xff means "segment not wired".
 VFD_MAP="${VFD_MAP:-13 14 15 10 11 12 16 ff \
 23 24 25 20 21 22 26 ff \
 33 34 35 30 31 32 36 ff \
 43 44 45 40 41 42 46 ff \
 ff 05 06 ff ff ff ff ff \
-01 02 03 ff ff ff ff ff}"
+04 02 03 ff ff ff ff ff}"
 
 SELF_INSTALLED=/usr/local/sbin/enable-front-panel-led.sh
 MAP_HELPER=/usr/local/sbin/front-panel-led-map
